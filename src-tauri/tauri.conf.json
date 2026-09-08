@@ -1,0 +1,51 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "copyright": "Copyright 2026 Rocktier",
+    "category": "Productivity",
+    "shortDescription": "Fast, elegant Markdown reader",
+    "longDescription": "Rocktier Markdown - A fast, elegant, private Markdown reader. Part of the Rocktier family of creative tools."
+  },
+  "productName": "Rocktier Markdown",
+  "version": "0.1.0",
+  "identifier": "com.rocktier.markdown",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Rocktier Markdown",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480,
+        "center": true,
+        "decorations": true,
+        "shadow": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+    }
+  },
+  "plugins": {
+    "dialog": null,
+    "fs": null
+  }
+}

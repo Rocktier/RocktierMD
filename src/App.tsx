@@ -1,0 +1,279 @@
+import { useState, useCallback, useEffect, useDeferredValue, useMemo, useRef } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { Toolbar } from "./components/Toolbar";
+import { Editor } from "./components/Editor";
+import { Preview } from "./components/Preview";
+import { Sidebar } from "./components/Sidebar";
+import { useTheme, toggleTheme } from "./hooks/useTheme";
+import { useScrollSync } from "./hooks/useScrollSync";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { parseMarkdown, extractHeadings, countWords, readTime, getTaskLines } from "./services/markdown";
+import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
+import { exists, readTextFile } from "@tauri-apps/plugin-fs";
+import { WELCOME_DOCUMENT, type ViewMode } from "./types/index";
+
+const LAST_PATH_KEY = "rocktier-md-last-path";
+
+interface DocState {
+  path: string | null;
+  content: string;
+  modified: boolean;
+}
+
+function baseName(path: string): string {
+  return path.split(/[/\\]/).pop() || "Untitled";
+}
+
+export default function App() {
+  useTheme();
+
+  const [doc, setDoc] = useState<DocState>({
+    path: null,
+    content: WELCOME_DOCUMENT,
+    modified: false,
+  });
+
+  const [view, setView] = useState<ViewMode>("split");
+  const [sidebar, setSidebar] = useState(false);
+  const [toast, setToast] = useState("");
+  const toastRef = useRef(0);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const docRef = useRef(doc);
+  const { onEditorScroll, onPreviewScroll } = useScrollSync(editorRef, previewRef);
+
+  useEffect(() => {
+    docRef.current = doc;
+  }, [doc]);
+
+  // Typing must never wait for parsing: preview renders from a deferred
+  // snapshot, so large documents stay responsive while typing.
+  const deferredContent = useDeferredValue(doc.content);
+  const html = useMemo(() => parseMarkdown(deferredContent), [deferredContent]);
+  const headings = useMemo(() => extractHeadings(deferredContent), [deferredContent]);
+  const taskLines = useMemo(() => getTaskLines(deferredContent), [deferredContent]);
+  const words = useMemo(() => countWords(doc.content), [doc.content]);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastRef.current) window.clearTimeout(toastRef.current);
+    toastRef.current = window.setTimeout(() => setToast(""), 2000);
+  }, []);
+
+  const onChange = useCallback((content: string) => {
+    setDoc((d) => ({ ...d, content, modified: true }));
+  }, []);
+
+  // Guard: confirm before discarding unsaved changes (new / open / quit)
+  const confirmDiscard = useCallback(async (): Promise<boolean> => {
+    if (!docRef.current.modified) return true;
+    return confirmDialog("当前文档有未保存的更改，确定要丢弃吗？");
+  }, []);
+
+  // Native close button: Rust blocks the close and emits this event;
+  // the frontend checks for unsaved changes before destroying the window.
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .listen<null>("app-close-requested", async () => {
+        if (!(await confirmDiscard())) return;
+        try {
+          await invoke("force_close");
+        } catch {
+          // window already gone
+        }
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [confirmDiscard]);
+
+  // Restore last-opened document on launch (极致简洁: zero-click resume)
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let cancelled = false;
+    const raw = localStorage.getItem(LAST_PATH_KEY);
+    if (!raw) return;
+    (async () => {
+      try {
+        if (!(await exists(raw))) return;
+        const text = await readTextFile(raw);
+        if (cancelled) return;
+        setDoc({ path: raw, content: text, modified: false });
+      } catch {
+        // file moved or unreadable — ignore, start fresh
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Toggle task checkbox: use 1-based source line number to avoid index drift.
+  const toggleTask = useCallback((lineNumber: number, checked: boolean) => {
+    const el = editorRef.current;
+    const start = el?.selectionStart ?? -1;
+    const end = el?.selectionEnd ?? -1;
+    setDoc((d) => {
+      const lines = d.content.split("\n");
+      const i = lineNumber - 1;
+      if (i >= 0 && i < lines.length && /^\s*[-*+]\s+\[[ xX]\]/.test(lines[i])) {
+        lines[i] = lines[i].replace(/(\[)[ xX](\])/, `$1${checked ? "x" : " "}$2`);
+      }
+      return { ...d, content: lines.join("\n"), modified: true };
+    });
+    // The textarea is controlled: React resetting value moves the caret to
+    // the end, so restore the selection after the re-render commits.
+    if (el && start >= 0 && document.activeElement === el) {
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(start, end);
+        } catch {
+          // element detached
+        }
+      });
+    }
+  }, []);
+
+  const rememberPath = useCallback((path: string | null) => {
+    try {
+      if (path) localStorage.setItem(LAST_PATH_KEY, path);
+      else localStorage.removeItem(LAST_PATH_KEY);
+    } catch {
+      // storage full or unavailable — non-fatal
+    }
+  }, []);
+
+  const doOpen = useCallback(async () => {
+    if (!(await confirmDiscard())) return;
+    const r = await openFile();
+    if (r) {
+      setDoc({ path: r.path, content: r.content, modified: false });
+      rememberPath(r.path);
+      showToast("File opened");
+    }
+  }, [confirmDiscard, showToast, rememberPath]);
+
+  const doSave = useCallback(async () => {
+    const { path, content } = docRef.current;
+    try {
+      if (!path) {
+        const p = await saveFileAs(content);
+        if (!p) return;
+        setDoc((d) => ({ ...d, path: p, modified: false }));
+        rememberPath(p);
+      } else {
+        await saveFile(path, content);
+        setDoc((d) => ({ ...d, modified: false }));
+      }
+      showToast("Saved");
+    } catch {
+      showToast("保存失败：无法写入文件");
+    }
+  }, [showToast, rememberPath]);
+
+  const doSaveAs = useCallback(async () => {
+    try {
+      const name = docRef.current.path ? baseName(docRef.current.path) : undefined;
+      const p = await saveFileAs(docRef.current.content, name);
+      if (p) {
+        setDoc((d) => ({ ...d, path: p, modified: false }));
+        rememberPath(p);
+        showToast("Saved as new file");
+      }
+    } catch {
+      showToast("保存失败：无法写入文件");
+    }
+  }, [showToast, rememberPath]);
+
+  const doNew = useCallback(async () => {
+    if (!(await confirmDiscard())) return;
+    setDoc({ path: null, content: "", modified: false });
+    showToast("New document");
+  }, [confirmDiscard, showToast]);
+
+  const cycleView = useCallback(() => {
+    setView((v) => (v === "split" ? "editor" : v === "editor" ? "preview" : "split"));
+  }, []);
+
+  const shortcuts = useMemo(
+    () => ({
+      onSave: doSave,
+      onSaveAs: doSaveAs,
+      onNew: doNew,
+      onOpen: doOpen,
+      onToggleSidebar: () => setSidebar((v) => !v),
+    }),
+    [doSave, doSaveAs, doNew, doOpen]
+  );
+  useKeyboardShortcuts(shortcuts);
+
+  const displayName = doc.path ? baseName(doc.path) : "Untitled";
+
+  return (
+    <div className="app-shell">
+      <Toolbar
+        viewMode={view}
+        onToggleView={cycleView}
+        onToggleSidebar={() => setSidebar((v) => !v)}
+        onNew={doNew}
+        onOpen={doOpen}
+        onSave={doSave}
+        modified={doc.modified}
+        displayName={displayName}
+        words={words}
+        minutes={readTime(doc.content)}
+        onToggleTheme={toggleTheme}
+      />
+      <div className="app-body">
+        <Sidebar
+          open={sidebar}
+          onOpen={doOpen}
+          onClose={() => setSidebar(false)}
+          headings={headings}
+          onJumpTo={(line) => {
+            const el = editorRef.current;
+            if (!el) return;
+            const allLines = el.value.split("\n");
+            let pos = 0;
+            for (let i = 0; i < line - 1 && i < allLines.length; i++) {
+              pos += allLines[i].length + 1;
+            }
+            el.focus();
+            el.setSelectionRange(pos, pos);
+            const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 25.2;
+            el.scrollTop = Math.max(0, (line - 5) * lineHeight);
+            setSidebar(false);
+          }}
+        />
+        <main className="editor-container">
+          {(view === "split" || view === "editor") && (
+            <Editor
+              content={doc.content}
+              onChange={onChange}
+              path={doc.path ?? undefined}
+              textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
+              onScroll={onEditorScroll}
+            />
+          )}
+          {(view === "split" || view === "preview") && (
+            <Preview
+              html={html}
+              previewRef={previewRef as React.RefObject<HTMLDivElement>}
+              onScroll={onPreviewScroll}
+              onToggleTask={toggleTask}
+              taskLines={taskLines}
+            />
+          )}
+        </main>
+      </div>
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
