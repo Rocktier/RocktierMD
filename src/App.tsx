@@ -289,8 +289,8 @@ export default function App() {
         onToggleTypewriter={() => setTypewriterMode((v) => !v)}
         focusMode={focusMode}
         onToggleFocus={() => setFocusMode((v) => !v)}
-        onFindReplace={() => {}}
-        onExportPdf={() => {}}
+        onFindReplace={() => setFindReplaceOpen((v) => !v)}
+        onExportPdf={() => window.print()}
         hasFrontmatter={hasFrontmatter}
         frontmatterOpen={frontmatterOpen}
         onToggleInfo={() => setFrontmatterOpen((v) => !v)}
