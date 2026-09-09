@@ -1,8 +1,10 @@
 // Markdown parsing + syntax highlighting
 import { micromark } from "micromark";
 import { gfm, gfmHtml } from "micromark-extension-gfm";
+import { gfmFootnote, gfmFootnoteHtml } from "micromark-extension-gfm-footnote";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
+import katex from "katex";
 
 // Minimal language set for 极致快: 5 core languages, ~80KB vs ~350KB full
 import javascript from "highlight.js/lib/languages/javascript";
@@ -22,19 +24,124 @@ hljs.registerLanguage("sh", bash);
 hljs.registerLanguage("shell", bash);
 hljs.registerLanguage("json", json);
 
-const EXT = [gfm({ singleTilde: false })];
-const HTML_EXT = [gfmHtml()];
+import type { Extension } from "micromark-util-types";
+
+const EXT: Extension[] = [gfmFootnote(), gfm({ singleTilde: false })];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const HTML_EXT: any[] = [gfmFootnoteHtml(), gfmHtml()];
+
+// --- Math extraction: pull out KaTeX before micromark sees the source ----
+// Replaced after DOMPurify to avoid KaTeX HTML being sanitized away.
+const MATH_SLOT = (n: number) => `<!--__rocktier_MATH_${n}__-->`;
+
+export interface ParseResult {
+  html: string;
+  frontmatter: string | null;
+}
 
 export function parseMarkdown(src: string): string {
-  const raw = micromark(src, {
+  return parseDocument(src).html;
+}
+
+export function parseDocument(src: string): ParseResult {
+  // 1. Extract frontmatter
+  const { body, frontmatter } = extractFrontmatter(src);
+
+  // 2. Extract math blocks before micromark so LaTeX doesn't get mangled
+  const mathStore: string[] = [];
+  let text = body.replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex) => {
+    const i = mathStore.length;
+    mathStore.push(`<div class="katex-block">${renderMath(tex, true)}</div>`);
+    return MATH_SLOT(i);
+  });
+  // Inline math: $...$ (must not start/end with whitespace, must be non-empty)
+  text = text.replace(/(^|[^\\])\$(?=\S)(.+?)(?<=\S)\$(?!\$)/g, (_m, pre, tex) => {
+    const i = mathStore.length;
+    mathStore.push(`<span class="katex-inline">${renderMath(tex, false)}</span>`);
+    return `${pre}${MATH_SLOT(i)}`;
+  });
+  // Unescape any \$ that we skipped
+  text = text.replace(/\\\$/g, "$");
+
+  // 3. Image resize syntax: ![alt](url =200x100)
+  //    Strip "=WxH" before micromark, re-apply on the img tags after render.
+  const sizeMap = new Map<string, { w: number; h: number | null }>();
+  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\s*=(\d+)(?:x(\d+))?\)/g,
+    (_m, alt: string, url: string, w: string, h: string) => {
+      sizeMap.set(url, { w: +w, h: h ? +h : null });
+      return `![${alt}](${url})`;
+    });
+
+  // 4. Parse with micromark
+  const raw = micromark(text, {
     allowDangerousHtml: true,
     allowDangerousProtocol: false,
     extensions: EXT,
     htmlExtensions: HTML_EXT,
   });
-  // allowDangerousHtml passes raw HTML through, so sanitize before it ever
-  // reaches dangerouslySetInnerHTML (defense in depth on top of the CSP).
-  return DOMPurify.sanitize(highlightCode(raw));
+
+  // 5. Highlight + sanitize
+  let html = DOMPurify.sanitize(highlightCode(raw));
+
+  // 6. Re-apply image sizes (width/height attributes)
+  if (sizeMap.size > 0) {
+    html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*?)>/g, (_m, pre: string, url: string, post: string) => {
+      const sz = sizeMap.get(decodeURIComponent(url));
+      if (!sz) return _m;
+      // Skip if width/height already present (raw HTML user override)
+      const hasW = /width=/.test(pre) || /width=/.test(post);
+      const hasH = /height=/.test(pre) || /height=/.test(post);
+      const wAttr = hasW ? '' : ` width="${sz.w}"`;
+      const hAttr = sz.h && !hasH ? ` height="${sz.h}"` : '';
+      return `<img${pre}src="${url}"${post}${wAttr}${hAttr}>`;
+    });
+  }
+
+  // 7. Restore math slots after DOMPurify
+  for (let i = 0; i < mathStore.length; i++) {
+    html = html.replace(MATH_SLOT(i), mathStore[i]);
+  }
+
+  return { html, frontmatter };
+}
+
+function renderMath(tex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(tex.trim(), {
+      displayMode,
+      throwOnError: false,
+      strict: false,
+    });
+  } catch {
+    return `<code class="katex-error">${escapeHtml(tex)}</code>`;
+  }
+}
+
+export interface Frontmatter {
+  raw: string;
+  title?: string;
+  author?: string;
+  date?: string;
+  [key: string]: string | undefined;
+}
+
+export function extractFrontmatter(src: string): { body: string; frontmatter: string | null } {
+  const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!m) return { body: src, frontmatter: null };
+  return { body: src.slice(m[0].length), frontmatter: m[1] };
+}
+
+/** Parse frontmatter string into key:value map (YAML subset) */
+export function parseFrontmatter(raw: string): Frontmatter {
+  const result: Frontmatter = { raw };
+  raw.split("\n").forEach((line) => {
+    const idx = line.indexOf(":");
+    if (idx <= 0) return;
+    const key = line.slice(0, idx).trim();
+    const val = line.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
+    if (key && val) result[key] = val;
+  });
+  return result;
 }
 
 function highlightCode(html: string): string {

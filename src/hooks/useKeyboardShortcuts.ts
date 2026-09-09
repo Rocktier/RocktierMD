@@ -6,11 +6,16 @@ interface ShortcutActions {
   onNew: () => void;
   onOpen: () => void;
   onToggleSidebar: () => void;
+  onToggleTypewriter: () => void;
+  onToggleFocus: () => void;
+  onFindReplace: () => void;
+  onExportPdf: () => void;
 }
 
 /**
  * Global keyboard shortcuts for the editor.
  * ⌘S = Save · ⌘⇧S = Save As · ⌘N = New · ⌘O = Open · ⌘\ = Toggle sidebar
+ * ⌘⇧T = Typewriter · ⌘⇧F = Focus mode · ⌘F = Find · ⌘⇧P = Export PDF
  */
 export function useKeyboardShortcuts(actions: ShortcutActions) {
   useEffect(() => {
@@ -34,6 +39,16 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
         case "\\":
           e.preventDefault();
           actions.onToggleSidebar();
+          break;
+        case "t":
+          if (e.shiftKey) { e.preventDefault(); actions.onToggleTypewriter(); }
+          break;
+        case "f":
+          if (e.shiftKey) { e.preventDefault(); actions.onToggleFocus(); }
+          else { e.preventDefault(); actions.onFindReplace(); }
+          break;
+        case "p":
+          if (e.shiftKey) { e.preventDefault(); actions.onExportPdf(); }
           break;
       }
     };

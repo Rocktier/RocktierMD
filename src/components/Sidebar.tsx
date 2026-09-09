@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { Heading } from "../services/markdown";
 
 interface Props {
@@ -10,6 +10,13 @@ interface Props {
 }
 
 export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, onJumpTo }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const filtered = filter
+    ? headings.filter((h) => h.text.toLowerCase().includes(filter.toLowerCase()))
+    : headings;
+
   return (
     <>
       {open && <div className="sidebar-overlay" onClick={onClose} />}
@@ -38,19 +45,72 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
 
           {headings.length > 0 && (
             <div className="sidebar-section">
-              <h3>Outline</h3>
-              <nav className="toc">
-                {headings.map((h, i) => (
-                  <button
-                    key={i}
-                    className={`toc-item level-${h.level}`}
-                    onClick={() => onJumpTo(h.line)}
-                    title={h.text}
-                  >
-                    {h.text}
-                  </button>
-                ))}
-              </nav>
+              <div
+                className="sidebar-head"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <h3 style={{ margin: 0 }}>Outline</h3>
+                <button
+                  style={{
+                    width: 20,
+                    height: 20,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    borderRadius: 6,
+                    background: "rgba(255,255,255,0.06)",
+                    color: "rgba(255,255,255,0.60)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                  onClick={() => setCollapsed((c) => !c)}
+                  aria-label={collapsed ? "Expand TOC" : "Collapse TOC"}
+                >
+                  {collapsed ? "+" : "−"}
+                </button>
+              </div>
+              {!collapsed && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Filter headings..."
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 8,
+                      color: "rgba(255,255,255,0.70)",
+                      fontSize: 12,
+                      padding: "5px 10px",
+                      outline: "none",
+                      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif",
+                    }}
+                  />
+                  <nav className="toc">
+                    {filtered.map((h, i) => (
+                      <button
+                        key={i}
+                        className={`toc-item level-${h.level}`}
+                        onClick={() => {
+                          onJumpTo(h.line);
+                          if (h.id) {
+                            document.getElementById(h.id)?.scrollIntoView({ behavior: "smooth" });
+                          }
+                        }}
+                        title={h.text}
+                      >
+                        {h.text}
+                      </button>
+                    ))}
+                  </nav>
+                </>
+              )}
             </div>
           )}
 

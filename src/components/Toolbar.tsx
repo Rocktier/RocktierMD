@@ -13,6 +13,15 @@ interface Props {
   words: number;
   minutes: number;
   onToggleTheme: () => void;
+  typewriterMode: boolean;
+  onToggleTypewriter: () => void;
+  focusMode: boolean;
+  onToggleFocus: () => void;
+  onFindReplace: () => void;
+  onExportPdf: () => void;
+  hasFrontmatter: boolean;
+  frontmatterOpen: boolean;
+  onToggleInfo: () => void;
 }
 
 export const Toolbar = memo(function Toolbar({
@@ -27,6 +36,15 @@ export const Toolbar = memo(function Toolbar({
   words,
   minutes,
   onToggleTheme,
+  typewriterMode,
+  onToggleTypewriter,
+  focusMode,
+  onToggleFocus,
+  onFindReplace,
+  onExportPdf,
+  hasFrontmatter,
+  frontmatterOpen,
+  onToggleInfo,
 }: Props) {
   return (
     <header className="toolbar">
@@ -114,11 +132,71 @@ export const Toolbar = memo(function Toolbar({
           title="Save (⌘S)"
           aria-label="保存"
         >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
             <path d="M3 1v5h8V1M3 14v-4h9v4" />
             <path d="M1 6v8h13V6" />
           </svg>
         </button>
+        <button
+          className={`tbar-btn ${typewriterMode ? "active" : ""}`}
+          onClick={onToggleTypewriter}
+          title="Typewriter (⌘⇧T)"
+          aria-label="打字机模式"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+            <line x1="2" y1="4" x2="13" y2="4" />
+            <line x1="2" y1="7.5" x2="13" y2="7.5" strokeWidth="2" />
+            <line x1="2" y1="11" x2="13" y2="11" />
+          </svg>
+        </button>
+        <button
+          className={`tbar-btn ${focusMode ? "active" : ""}`}
+          onClick={onToggleFocus}
+          title="Focus (⌘⇧F)"
+          aria-label="聚焦模式"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+            <circle cx="7.5" cy="7.5" r="2.5" />
+            <circle cx="7.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        <button
+          className="tbar-btn"
+          onClick={onFindReplace}
+          title="Find (⌘F)"
+          aria-label="查找替换"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+            <circle cx="6.5" cy="6.5" r="4" />
+            <line x1="9.5" y1="9.5" x2="13" y2="13" />
+          </svg>
+        </button>
+        <button
+          className="tbar-btn"
+          onClick={onExportPdf}
+          title="Export PDF (⌘⇧P)"
+          aria-label="导出 PDF"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+            <line x1="7.5" y1="2" x2="7.5" y2="9" />
+            <polyline points="5,6.5 7.5,9 10,6.5" fill="none" />
+            <line x1="3" y1="13" x2="12" y2="13" />
+          </svg>
+        </button>
+        {hasFrontmatter && (
+          <button
+            className={`tbar-btn ${frontmatterOpen ? "active" : ""}`}
+            onClick={onToggleInfo}
+            title="Info"
+            aria-label="文档信息"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+              <circle cx="7.5" cy="7.5" r="5.5" />
+              <circle cx="7.5" cy="5" r="0.8" fill="currentColor" stroke="none" />
+              <line x1="7.5" y1="7" x2="7.5" y2="11" />
+            </svg>
+          </button>
+        )}
         <button className="tbar-btn theme-btn" onClick={onToggleTheme} title="Toggle theme" aria-label="切换日夜模式">
           <svg className="icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
             <circle cx="7" cy="7" r="3" />

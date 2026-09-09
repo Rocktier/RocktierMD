@@ -7,6 +7,7 @@ interface Props {
   onScroll?: () => void;
   onToggleTask?: (lineNumber: number, checked: boolean) => void;
   taskLines?: number[];
+  onOpenDocument?: (path: string) => void;
 }
 
 // micromark does not emit heading ids, so apply them post-render using the
@@ -26,7 +27,7 @@ function applyHeadingIds(root: HTMLElement) {
     });
 }
 
-export const Preview = memo(function Preview({ html, previewRef, onScroll, onToggleTask, taskLines }: Props) {
+export const Preview = memo(function Preview({ html, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument }: Props) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = previewRef || internalRef;
 
@@ -66,7 +67,28 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
         }
       });
     });
-  }, [html, onToggleTask]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Intercept cross-document links (.md / .markdown) when a handler is provided
+    if (onOpenDocument) {
+      el.querySelectorAll('.md-viewer a[href]').forEach((a) => {
+        const href = (a as HTMLAnchorElement).getAttribute("href") || "";
+        // Skip pure anchors, web/mailto links
+        if (href.startsWith("#") || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:")) {
+          return;
+        }
+        // Only intercept .md / .markdown paths
+        if (!/\.(md|markdown)$/i.test(href)) {
+          return;
+        }
+        const clone = a.cloneNode(true) as HTMLAnchorElement;
+        a.replaceWith(clone);
+        clone.addEventListener("click", (e) => {
+          e.preventDefault();
+          onOpenDocument(href);
+        });
+      });
+    }
+  }, [html, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="preview-pane">

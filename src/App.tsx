@@ -5,10 +5,11 @@ import { Toolbar } from "./components/Toolbar";
 import { Editor } from "./components/Editor";
 import { Preview } from "./components/Preview";
 import { Sidebar } from "./components/Sidebar";
+import { FindReplace } from "./components/FindReplace";
 import { useTheme, toggleTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { parseMarkdown, extractHeadings, countWords, readTime, getTaskLines } from "./services/markdown";
+import { parseDocument, extractHeadings, countWords, readTime, getTaskLines, parseFrontmatter, type Frontmatter } from "./services/markdown";
 import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type ViewMode } from "./types/index";
@@ -37,6 +38,10 @@ export default function App() {
   const [view, setView] = useState<ViewMode>("split");
   const [sidebar, setSidebar] = useState(false);
   const [toast, setToast] = useState("");
+  const [typewriterMode, setTypewriterMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [frontmatterOpen, setFrontmatterOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const toastRef = useRef(0);
   const previewRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -50,10 +55,13 @@ export default function App() {
   // Typing must never wait for parsing: preview renders from a deferred
   // snapshot, so large documents stay responsive while typing.
   const deferredContent = useDeferredValue(doc.content);
-  const html = useMemo(() => parseMarkdown(deferredContent), [deferredContent]);
+  const parsed = useMemo(() => parseDocument(deferredContent), [deferredContent]);
+  const html = parsed.html;
   const headings = useMemo(() => extractHeadings(deferredContent), [deferredContent]);
   const taskLines = useMemo(() => getTaskLines(deferredContent), [deferredContent]);
   const words = useMemo(() => countWords(doc.content), [doc.content]);
+  const frontmatterData = useMemo<Frontmatter | null>(() =>
+    parsed.frontmatter ? parseFrontmatter(parsed.frontmatter) : null, [parsed.frontmatter]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -209,12 +217,59 @@ export default function App() {
       onNew: doNew,
       onOpen: doOpen,
       onToggleSidebar: () => setSidebar((v) => !v),
+      onToggleTypewriter: () => setTypewriterMode((v) => !v),
+      onToggleFocus: () => setFocusMode((v) => !v),
+      onFindReplace: () => setFindReplaceOpen((v) => !v),
+      onExportPdf: () => window.print(),
     }),
     [doSave, doSaveAs, doNew, doOpen]
   );
   useKeyboardShortcuts(shortcuts);
 
   const displayName = doc.path ? baseName(doc.path) : "Untitled";
+  const hasFrontmatter = frontmatterData !== null;
+
+  // Drag-and-drop file open (desktop)
+  const onDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ext || !["md","markdown","mdown","mkd","txt","text"].includes(ext)) {
+      showToast("不支持的文件类型");
+      return;
+    }
+    if (!(await confirmDiscard())) return;
+    try {
+      const text = await (file as any).text();
+      setDoc({ path: (file as any).path ?? null, content: text, modified: false });
+      if ((file as any).path) rememberPath((file as any).path);
+      showToast("File opened");
+    } catch {
+      showToast("无法读取文件");
+    }
+  }, [confirmDiscard, rememberPath, showToast]);
+
+  const onOpenDocument = useCallback((filePath: string) => {
+    if (filePath.startsWith("/") || filePath.includes("://")) {
+      // Absolute or URL: open directly
+      if (filePath.includes("://")) return;
+      (async () => {
+        if (!(await confirmDiscard())) return;
+        try {
+          if (!(await exists(filePath))) { showToast("文件不存在"); return; }
+          const text = await readTextFile(filePath);
+          setDoc({ path: filePath, content: text, modified: false });
+          rememberPath(filePath);
+        } catch { showToast("无法打开文件"); }
+      })();
+    } else {
+      // Relative path: resolve against current document's directory
+      const base = doc.path?.replace(/[^/]+$/, "") ?? "";
+      const resolved = base + filePath;
+      onOpenDocument(resolved);
+    }
+  }, [confirmDiscard, rememberPath, showToast]);
 
   return (
     <div className="app-shell">
@@ -230,8 +285,20 @@ export default function App() {
         words={words}
         minutes={readTime(doc.content)}
         onToggleTheme={toggleTheme}
+        typewriterMode={typewriterMode}
+        onToggleTypewriter={() => setTypewriterMode((v) => !v)}
+        focusMode={focusMode}
+        onToggleFocus={() => setFocusMode((v) => !v)}
+        onFindReplace={() => {}}
+        onExportPdf={() => {}}
+        hasFrontmatter={hasFrontmatter}
+        frontmatterOpen={frontmatterOpen}
+        onToggleInfo={() => setFrontmatterOpen((v) => !v)}
       />
-      <div className="app-body">
+      <div className={`app-body ${typewriterMode ? "typewriter-mode" : ""} ${focusMode ? "focus-mode" : ""}`}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={onDrop}
+      >
         <Sidebar
           open={sidebar}
           onOpen={doOpen}
@@ -260,6 +327,15 @@ export default function App() {
               path={doc.path ?? undefined}
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
+              onImagePaste={() => showToast("图片已插入")}
+            />
+          )}
+          {findReplaceOpen && (
+            <FindReplace
+              content={doc.content}
+              textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
+              onChange={onChange}
+              onClose={() => setFindReplaceOpen(false)}
             />
           )}
           {(view === "split" || view === "preview") && (
@@ -269,10 +345,24 @@ export default function App() {
               onScroll={onPreviewScroll}
               onToggleTask={toggleTask}
               taskLines={taskLines}
+              onOpenDocument={onOpenDocument}
             />
           )}
         </main>
       </div>
+      {frontmatterOpen && hasFrontmatter && frontmatterData && (
+        <div className="frontmatter-panel" role="complementary" aria-label="文档信息">
+          <div className="fm-header">
+            <span className="fm-title">文档信息</span>
+            <button className="fm-close" onClick={() => setFrontmatterOpen(false)} aria-label="关闭">×</button>
+          </div>
+          <dl className="fm-body">
+            {frontmatterData.title && <><dt>标题</dt><dd>{frontmatterData.title}</dd></>}
+            {frontmatterData.author && <><dt>作者</dt><dd>{frontmatterData.author}</dd></>}
+            {frontmatterData.date && <><dt>日期</dt><dd>{frontmatterData.date}</dd></>}
+          </dl>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

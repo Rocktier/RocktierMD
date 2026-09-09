@@ -23,3 +23,14 @@ dist-ssr
 # Tauri
 src-tauri/target
 src-tauri/Cargo.lock
+
+# Build artifacts
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Code review graph DB
+src/.code-review-graph/graph.db
+
+# Local DMG
+*.dmg

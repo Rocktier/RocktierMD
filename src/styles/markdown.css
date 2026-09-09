@@ -151,6 +151,65 @@
   margin-right: 0.5em;
 }
 
+/* ── Nested List Indentation (checkbox-based hierarchy) ─────────────
+   Increases margin-left for li that contains a nested ul/ol,
+   up to 4 levels deep (~24px per level). */
+
+.md-viewer li > ul,
+.md-viewer li > ol {
+  margin: 0.15em 0;
+}
+
+.md-viewer li {
+  margin: 0.2em 0;
+}
+
+/* Level 1 nested (immediate child of li which has a nested list) */
+.md-viewer li > ul > li,
+.md-viewer li > ol > li {
+  margin-left: 24px;
+}
+
+/* Level 2 */
+.md-viewer li > ul > li > ul > li,
+.md-viewer li > ul > li > ol > li,
+.md-viewer li > ol > li > ul > li,
+.md-viewer li > ol > li > ol > li {
+  margin-left: 48px;
+}
+
+/* Level 3 */
+.md-viewer li > ul > li > ul > li > ul > li,
+.md-viewer li > ul > li > ul > li > ol > li,
+.md-viewer li > ul > li > ol > li > ul > li,
+.md-viewer li > ul > li > ol > li > ol > li,
+.md-viewer li > ol > li > ul > li > ul > li,
+.md-viewer li > ol > li > ul > li > ol > li,
+.md-viewer li > ol > li > ol > li > ul > li,
+.md-viewer li > ol > li > ol > li > ol > li {
+  margin-left: 72px;
+}
+
+/* Level 4 */
+.md-viewer li > ul > li > ul > li > ul > li > ul > li,
+.md-viewer li > ul > li > ul > li > ul > li > ol > li,
+.md-viewer li > ul > li > ul > li > ol > li > ul > li,
+.md-viewer li > ul > li > ul > li > ol > li > ol > li,
+.md-viewer li > ul > li > ol > li > ul > li > ul > li,
+.md-viewer li > ul > li > ol > li > ul > li > ol > li,
+.md-viewer li > ul > li > ol > li > ol > li > ul > li,
+.md-viewer li > ul > li > ol > li > ol > li > ol > li,
+.md-viewer li > ol > li > ul > li > ul > li > ul > li,
+.md-viewer li > ol > li > ul > li > ul > li > ol > li,
+.md-viewer li > ol > li > ul > li > ol > li > ul > li,
+.md-viewer li > ol > li > ul > li > ol > li > ol > li,
+.md-viewer li > ol > li > ol > li > ul > li > ul > li,
+.md-viewer li > ol > li > ol > li > ul > li > ol > li,
+.md-viewer li > ol > li > ol > li > ol > li > ul > li,
+.md-viewer li > ol > li > ol > li > ol > li > ol > li {
+  margin-left: 96px;
+}
+
 /* ── Code ────────────────────────────────────────────────────────── */
 
 .md-viewer code {
@@ -176,6 +235,16 @@
   position: relative;
 }
 
+/* ── Code Block Line Numbers ────────────────────────────────────────
+   Assumes highlight.js wraps each line in a span per line
+   (data-ln / .hljs-ln-line) or we target each code line element.
+   Uses CSS counters for auto-numbering. */
+
+.md-viewer pre.code-block {
+  counter-reset: line;
+  padding-left: 3.8em;
+}
+
 .md-viewer pre.code-block::before {
   content: attr(data-lang);
   position: absolute;
@@ -189,13 +258,30 @@
   pointer-events: none;
 }
 
-.md-viewer pre code {
+.md-viewer pre.code-block code {
   background: none;
   padding: 0;
   font-size: inherit;
   border: none;
   border-radius: 0;
   tab-size: 2;
+  display: block;
+}
+
+.md-viewer pre.code-block .hljs-ln-line::before,
+.md-viewer pre.code-block code > span[data-ln]::before,
+.md-viewer pre.code-block .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2.6em;
+  margin-left: -3.2em;
+  margin-right: 0.6em;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Tables ──────────────────────────────────────────────────────── */
@@ -352,8 +438,39 @@
   .md-viewer {
     max-width: none;
     padding: 0;
+    print-color-adjust: economic;
+    -webkit-print-color-adjust: economic;
   }
+
   .md-viewer pre {
     white-space: pre-wrap;
+    print-color-adjust: economic;
+    -webkit-print-color-adjust: economic;
+  }
+
+  /* Hide UI chrome */
+  .toolbar,
+  .sidebar,
+  .app-titlebar,
+  .toast,
+  .word-count,
+  .char-count,
+  .stat,
+  .doc-pill,
+  .view-switch,
+  .sidebar-overlay {
+    display: none !important;
+  }
+
+  /* Expand content panes for print */
+  .editor-pane,
+  .preview-pane {
+    display: none !important;
+  }
+
+  .print-content {
+    display: block !important;
+    width: 100%;
+    padding: 0;
   }
 }

@@ -6,11 +6,12 @@ interface Props {
   path?: string;
   textareaRef?: RefObject<HTMLTextAreaElement>;
   onScroll?: () => void;
+  onImagePaste?: (dataUrl: string) => void;
 }
 
 const INDENT = "  ";
 
-export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll }: Props) {
+export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef || internalRef;
 
@@ -85,8 +86,45 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
         el.selectionStart = el.selectionEnd = s + ins.length;
         onChange(el.value);
       }
+      // GFM task list continuation
+      const tline = line.match(/^(\s*)([-*+])\s+\[[ xX]\]\s+(.*)$/);
+      if (tline && tline[4].trim() !== "") {
+        e.preventDefault();
+        const ins = `\n${tline[1]}${tline[2]}[ ] `;
+        el.value = el.value.substring(0, s) + ins + el.value.substring(el.selectionEnd);
+        el.selectionStart = el.selectionEnd = s + ins.length;
+        onChange(el.value);
+        return;
+      }
     }
   }, [onChange]);
+
+  const onPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const el = ref.current;
+          if (!el) return;
+          const s = el.selectionStart;
+          const end = el.selectionEnd;
+          const md = `![image](${dataUrl})`;
+          el.value = el.value.substring(0, s) + md + el.value.substring(end);
+          el.selectionStart = el.selectionEnd = s + md.length;
+          onChange(el.value);
+          onImagePaste?.(dataUrl);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  }, [onChange, onImagePaste]);
 
   return (
     <div className="editor-pane">
@@ -97,6 +135,7 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
           value={content}
           onChange={onInput}
           onKeyDown={onKey}
+          onPaste={onPaste}
           onScroll={onScroll}
           spellCheck={false}
           autoCapitalize="off"
