@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { t, useUiLang } from "../i18n";
 
 interface FindReplaceButtonProps {
   onClick: () => void;
@@ -71,11 +72,31 @@ export const FindReplace = memo(function FindReplace({
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  useUiLang(); // 语言切换时重渲染
+
   // Focus search input on mount
   useEffect(() => {
-    const t = setTimeout(() => searchInputRef.current?.focus(), 30);
-    return () => clearTimeout(t);
+    const tid = setTimeout(() => searchInputRef.current?.focus(), 30);
+    return () => clearTimeout(tid);
   }, []);
+
+  // 通过 execCommand("insertText") 改写文本区：浏览器会把它记入原生 undo 栈，
+  // 替换/全部替换之后 Ctrl+Z（⌘Z）可以一步撤销。
+  const splice = useCallback(
+    (from: number, to: number, text: string) => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(from, to);
+      if (!document.execCommand("insertText", false, text)) {
+        // 兜底：极老内核不支持 execCommand 时退回直接赋值（此时撤销不可用）
+        el.value = el.value.slice(0, from) + text + el.value.slice(to);
+        el.setSelectionRange(from + text.length, from + text.length);
+      }
+      onChange(el.value);
+    },
+    [textareaRef, onChange]
+  );
 
   // Compute all match start indices for the current search term in content
   const computeMatches = useCallback(
@@ -175,9 +196,9 @@ export const FindReplace = memo(function FindReplace({
     const selectedText = content.substring(selStart, selEnd);
 
     if (selectedText === searchTerm) {
-      const newContent =
-        content.substring(0, selStart) + replaceText + content.substring(selEnd);
-      onChange(newContent);
+      // 经由 execCommand 改写，保留原生 undo 栈
+      splice(selStart, selEnd, replaceText);
+      const newContent = content.substring(0, selStart) + replaceText + content.substring(selEnd);
 
       // The textarea value hasn't updated yet from the prop change, so use
       // requestAnimationFrame to run after React has flushed
@@ -215,16 +236,31 @@ export const FindReplace = memo(function FindReplace({
       // Selection doesn't match; go to next instead
       goNext();
     }
-  }, [textareaRef, searchTerm, replaceText, content, onChange, computeMatches, goNext]);
+  }, [textareaRef, searchTerm, replaceText, content, splice, goNext]);
 
-  // Replace all occurrences
+  // Replace all occurrences — 单次整体改写，Ctrl+Z / ⌘Z 一步撤销
   const doReplaceAll = useCallback(() => {
     if (!searchTerm) return;
     const newContent = content.replaceAll(searchTerm, replaceText);
+    if (newContent === content) {
+      setMatchCount(0);
+      setMatchIndex(0);
+      return;
+    }
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(0, content.length);
+      if (!document.execCommand("insertText", false, newContent)) {
+        // 兜底：不支持 execCommand 时退回直接赋值（此时撤销不可用）
+        el.value = newContent;
+        el.setSelectionRange(newContent.length, newContent.length);
+      }
+    }
     onChange(newContent);
     setMatchCount(0);
     setMatchIndex(0);
-  }, [searchTerm, replaceText, content, onChange]);
+  }, [searchTerm, replaceText, content, onChange, textareaRef]);
 
   // Global Escape handler + Enter/Shift+Enter on search input
   useEffect(() => {
@@ -280,7 +316,7 @@ export const FindReplace = memo(function FindReplace({
         value={searchTerm}
         onChange={onSearchChange}
         onKeyDown={onSearchKeyDown}
-        placeholder="Find"
+        placeholder={t("find.find")}
         spellCheck={false}
         autoCapitalize="off"
         autoComplete="off"
@@ -324,7 +360,7 @@ export const FindReplace = memo(function FindReplace({
             onClose();
           }
         }}
-        placeholder="Replace"
+        placeholder={t("find.replace")}
         spellCheck={false}
         autoCapitalize="off"
         autoComplete="off"
@@ -353,12 +389,12 @@ export const FindReplace = memo(function FindReplace({
         }}
       >
         {/* Previous */}
-        <FindReplaceButton onClick={goPrev} disabled={!hasTerm} title="Previous match (Shift+Enter)">
+        <FindReplaceButton onClick={goPrev} disabled={!hasTerm} title={t("find.prevTitle")}>
           &#9664;
         </FindReplaceButton>
 
         {/* Next */}
-        <FindReplaceButton onClick={goNext} disabled={!hasTerm} title="Next match (Enter)">
+        <FindReplaceButton onClick={goNext} disabled={!hasTerm} title={t("find.nextTitle")}>
           &#9654;
         </FindReplaceButton>
 
@@ -376,24 +412,24 @@ export const FindReplace = memo(function FindReplace({
         <FindReplaceButton
           onClick={doReplace}
           disabled={!hasTerm || matchCount === 0}
-          title="Replace"
+          title={t("find.replaceTitle")}
           bordered
         >
-          Replace
+          {t("find.replace")}
         </FindReplaceButton>
 
         {/* Replace All */}
         <FindReplaceButton
           onClick={doReplaceAll}
           disabled={!hasTerm}
-          title="Replace All"
+          title={t("find.replaceAllTitle")}
           bordered
         >
-          All
+          {t("find.replaceAll")}
         </FindReplaceButton>
 
         {/* Close */}
-        <FindReplaceButton onClick={onClose} title="Close (Escape)">
+        <FindReplaceButton onClick={onClose} title={t("find.closeTitle")}>
           &times;
         </FindReplaceButton>
       </div>

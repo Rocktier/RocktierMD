@@ -16,24 +16,35 @@ import {
 import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
+import { t } from "./i18n";
 
 const LAST_PATH_KEY = "rocktier-md-last-path";
+
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+const MARKDOWN_EXTS = ["md", "markdown", "mdown", "mkd", "txt", "text"];
 
 function baseName(path: string): string {
   return path.split(/[/\\]/).pop() || "Untitled";
 }
 
 // Resolve a relative markdown link against the current document's directory.
-// Handles ./ and ../ segments; returns an absolute POSIX path.
+// Handles ./ and ../ segments; accepts both POSIX and Windows separators
+// and drive letters — returns an absolute path usable by the fs plugin.
 function resolvePath(base: string, rel: string): string {
-  const parts = (rel.startsWith("/") ? rel : base + rel).split("/");
+  const relIsAbs = /^[/\\]/.test(rel) || /^[A-Za-z]:[\\/]/.test(rel);
+  const combined = relIsAbs ? rel : base + rel;
+  const parts = combined.split(/[\\/]/);
+  // Windows 盘符（"C:"）保留在结果开头，其余段做 .. / . 归一化
+  const drive = /^[A-Za-z]:$/.test(parts[0]) ? parts.shift() : null;
   const out: string[] = [];
   for (const part of parts) {
     if (!part || part === ".") continue;
     if (part === "..") out.pop();
     else out.push(part);
   }
-  return "/" + out.join("/");
+  const joined = out.join("/");
+  return drive ? `${drive}/${joined}` : `/${joined}`;
 }
 
 export default function App() {
@@ -84,28 +95,33 @@ export default function App() {
   // Guard: confirm before discarding unsaved changes (new / open / quit)
   const confirmDiscard = useCallback(async (): Promise<boolean> => {
     if (!docRef.current.modified) return true;
-    return confirmDialog("当前文档有未保存的更改，确定要丢弃吗？");
+    return confirmDialog(t("confirm.discard"));
   }, []);
 
-  // Native close button: Rust blocks the close and emits this event;
-  // the frontend checks for unsaved changes before destroying the window.
+  // Native close button: Rust blocks the close until the frontend is ready,
+  // then hands the decision to the frontend (unsaved-changes check).
   useEffect(() => {
-    if (!("__TAURI_INTERNALS__" in window)) return;
+    if (!isTauri) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    getCurrentWindow()
-      .listen<null>("app-close-requested", async () => {
+    (async () => {
+      const fn = await getCurrentWindow().listen<null>("app-close-requested", async () => {
         if (!(await confirmDiscard())) return;
         try {
           await invoke("force_close");
         } catch {
           // window already gone
         }
-      })
-      .then((fn) => {
-        if (disposed) fn();
-        else unlisten = fn;
       });
+      if (disposed) {
+        fn();
+        return;
+      }
+      unlisten = fn;
+      // 前端就绪后才启用“拦截关窗”。若 JS 尚未加载完/已崩溃，
+      // Rust 侧直接放行默认关闭行为，避免出现永远关不掉的窗口。
+      await invoke("mark_ready").catch(() => {});
+    })();
     return () => {
       disposed = true;
       unlisten?.();
@@ -175,7 +191,7 @@ export default function App() {
     if (r) {
       setDoc({ path: r.path, content: r.content, modified: false });
       rememberPath(r.path);
-      showToast("File opened");
+      showToast(t("toast.fileOpened"));
     }
   }, [confirmDiscard, showToast, rememberPath]);
 
@@ -191,9 +207,9 @@ export default function App() {
         await saveFile(path, content);
         setDoc((d) => ({ ...d, modified: false }));
       }
-      showToast("Saved");
+      showToast(t("toast.saved"));
     } catch {
-      showToast("保存失败：无法写入文件");
+      showToast(t("toast.saveFailed"));
     }
   }, [showToast, rememberPath]);
 
@@ -204,17 +220,17 @@ export default function App() {
       if (p) {
         setDoc((d) => ({ ...d, path: p, modified: false }));
         rememberPath(p);
-        showToast("Saved as new file");
+        showToast(t("toast.savedAs"));
       }
     } catch {
-      showToast("保存失败：无法写入文件");
+      showToast(t("toast.saveFailed"));
     }
   }, [showToast, rememberPath]);
 
   const doNew = useCallback(async () => {
     if (!(await confirmDiscard())) return;
     setDoc({ path: null, content: "", modified: false });
-    showToast("New document");
+    showToast(t("toast.newDoc"));
   }, [confirmDiscard, showToast]);
 
   const cycleView = useCallback(() => {
@@ -251,14 +267,40 @@ export default function App() {
   const displayName = doc.path ? baseName(doc.path) : "Untitled";
   const hasFrontmatter = frontmatterData !== null;
 
-  // Drag-and-drop file open (desktop)
+  // 在桌面端通过 Tauri 拖放事件 / 浏览器 dev 通过 HTML5 拖放打开文件。
+  // 注意：打包版（dragDropEnabled 默认 true）下 HTML5 drop 不会触发，
+  // 必须走 onDragDropEvent —— 此前只实现了 HTML5 路径，导致发布版拖拽失效。
+  const openMarkdownPath = useCallback(async (path: string): Promise<boolean> => {
+    const ext = path.split(".").pop()?.toLowerCase();
+    if (!ext || !MARKDOWN_EXTS.includes(ext)) {
+      showToast(t("toast.unsupportedType"));
+      return false;
+    }
+    if (!(await confirmDiscard())) return false;
+    try {
+      if (!(await exists(path))) {
+        showToast(t("toast.fileNotExists"));
+        return false;
+      }
+      const text = await readTextFile(path);
+      setDoc({ path, content: text, modified: false });
+      rememberPath(path);
+      showToast(t("toast.fileOpened"));
+      return true;
+    } catch {
+      showToast(t("toast.cannotReadFile"));
+      return false;
+    }
+  }, [confirmDiscard, rememberPath, showToast]);
+
+  // Drag-and-drop file open (browser dev fallback; desktop uses onDragDropEvent)
   const onDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["md", "markdown", "mdown", "mkd", "txt", "text"].includes(ext)) {
-      showToast("不支持的文件类型");
+    if (!ext || !MARKDOWN_EXTS.includes(ext)) {
+      showToast(t("toast.unsupportedType"));
       return;
     }
     if (!(await confirmDiscard())) return;
@@ -266,11 +308,35 @@ export default function App() {
       const text = await (file as any).text();
       setDoc({ path: (file as any).path ?? null, content: text, modified: false });
       if ((file as any).path) rememberPath((file as any).path);
-      showToast("File opened");
+      showToast(t("toast.fileOpened"));
     } catch {
-      showToast("无法读取文件");
+      showToast(t("toast.cannotReadFile"));
     }
   }, [confirmDiscard, rememberPath, showToast]);
+
+  // Desktop drag & drop (Tauri v2 native event; works in the packaged app)
+  useEffect(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .onDragDropEvent(async (event) => {
+        const payload = (event as { payload?: { type?: string; paths?: string[] } }).payload;
+        if (payload?.type !== "drop") return;
+        const path = payload.paths?.[0];
+        if (!path) return;
+        if (disposed) return;
+        await openMarkdownPath(path);
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [openMarkdownPath]);
 
   // Click a cross-document link in the preview. Relative paths resolve
   // against the current document's directory.
@@ -278,21 +344,24 @@ export default function App() {
     (async () => {
       if (!(await confirmDiscard())) return;
       let target = filePath;
-      if (!target.startsWith("/")) {
-        const base = docRef.current.path?.replace(/[^/]+$/, "") ?? "";
+      const isAbsolute = /^[/\\]/.test(filePath) || /^[A-Za-z]:[\\/]/.test(filePath);
+      if (!isAbsolute) {
+        // 剥掉文件名拿到所在目录。Windows 路径用反斜杠，必须同时处理两种分隔符，
+        // 否则 base 恒为空、相对链接永远无法解析。
+        const base = docRef.current.path?.replace(/[^/\\]+$/, "") ?? "";
         if (!base) {
-          showToast("无法解析相对路径");
+          showToast(t("toast.cannotResolvePath"));
           return;
         }
         target = resolvePath(base, target);
       }
       try {
-        if (!(await exists(target))) { showToast("文件不存在"); return; }
+        if (!(await exists(target))) { showToast(t("toast.fileNotExists")); return; }
         const text = await readTextFile(target);
         setDoc({ path: target, content: text, modified: false });
         rememberPath(target);
       } catch {
-        showToast("无法打开文件");
+        showToast(t("toast.cannotOpenFile"));
       }
     })();
   }, [confirmDiscard, rememberPath, showToast]);
@@ -349,7 +418,7 @@ export default function App() {
               onChange={onChange}
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
-              onImagePaste={() => showToast("图片已插入")}
+              onImagePaste={() => showToast(t("toast.imageInserted"))}
             />
           )}
           {findReplaceOpen && (
@@ -373,15 +442,15 @@ export default function App() {
         </main>
       </div>
       {frontmatterOpen && hasFrontmatter && frontmatterData && (
-        <div className="frontmatter-panel" role="complementary" aria-label="文档信息">
+        <div className="frontmatter-panel" role="complementary" aria-label={t("fm.title")}>
           <div className="fm-header">
-            <span className="fm-title">文档信息</span>
-            <button className="fm-close" onClick={() => setFrontmatterOpen(false)} aria-label="关闭">×</button>
+            <span className="fm-title">{t("fm.title")}</span>
+            <button className="fm-close" onClick={() => setFrontmatterOpen(false)} aria-label={t("fm.close")}>×</button>
           </div>
           <dl className="fm-body">
-            {frontmatterData.title && <><dt>标题</dt><dd>{frontmatterData.title}</dd></>}
-            {frontmatterData.author && <><dt>作者</dt><dd>{frontmatterData.author}</dd></>}
-            {frontmatterData.date && <><dt>日期</dt><dd>{frontmatterData.date}</dd></>}
+            {frontmatterData.title && <><dt>{t("fm.titleLabel")}</dt><dd>{frontmatterData.title}</dd></>}
+            {frontmatterData.author && <><dt>{t("fm.author")}</dt><dd>{frontmatterData.author}</dd></>}
+            {frontmatterData.date && <><dt>{t("fm.date")}</dt><dd>{frontmatterData.date}</dd></>}
           </dl>
         </div>
       )}

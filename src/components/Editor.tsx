@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef, type RefObject } from "react";
+import { t, useUiLang } from "../i18n";
 
 interface Props {
   content: string;
@@ -13,6 +14,7 @@ const INDENT = "  ";
 export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef || internalRef;
+  useUiLang(); // 语言切换时重渲染
 
   const onInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value);
@@ -140,7 +142,7 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
           autoCapitalize="off"
           autoComplete="off"
           autoCorrect="off"
-          placeholder="Start writing Markdown..."
+          placeholder={t("editor.placeholder")}
         />
       </div>
     </div>

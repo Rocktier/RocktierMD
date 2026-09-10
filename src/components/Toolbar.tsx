@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { ViewMode } from "../types";
+import { t, useUiLang } from "../i18n";
 
 interface Props {
   viewMode: ViewMode;
@@ -38,10 +39,11 @@ export const Toolbar = memo(function Toolbar({
   frontmatterOpen,
   onToggleInfo,
 }: Props) {
+  useUiLang(); // 语言切换时重渲染
   return (
     <header className="toolbar">
       <div className="toolbar-side">
-        <button className="tbar-btn" onClick={onToggleSidebar} title="Sidebar (\)" aria-label="切换侧栏">
+        <button className="tbar-btn" onClick={onToggleSidebar} title={t("toolbar.toggleSidebar")} aria-label={t("toolbar.toggleSidebar")}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
             <rect x="1.5" y="1.5" width="13" height="13" rx="2" />
             <line x1="5.5" y1="1.5" x2="5.5" y2="14.5" />
@@ -64,7 +66,7 @@ export const Toolbar = memo(function Toolbar({
             disabled={viewMode === "editor"}
             onClick={onToggleView}
             title="Editor"
-            aria-label="仅编辑"
+            aria-label={t("toolbar.editorOnly")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
               <rect x="1" y="1" width="12" height="12" rx="2" />
@@ -78,7 +80,7 @@ export const Toolbar = memo(function Toolbar({
             disabled={viewMode === "split"}
             onClick={onToggleView}
             title="Split"
-            aria-label="分屏"
+            aria-label={t("toolbar.split")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
               <rect x="1" y="1" width="12" height="12" rx="2" />
@@ -90,7 +92,7 @@ export const Toolbar = memo(function Toolbar({
             disabled={viewMode === "preview"}
             onClick={onToggleView}
             title="Preview"
-            aria-label="仅预览"
+            aria-label={t("toolbar.previewOnly")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
               <rect x="1" y="1" width="12" height="12" rx="2" />
@@ -102,18 +104,18 @@ export const Toolbar = memo(function Toolbar({
       </div>
 
       <div className="toolbar-actions">
-        <button className="tbar-btn stat" title={`${words} words`} aria-label={`${words} 字 / ${minutes} 分钟阅读`}>
+        <button className="tbar-btn stat" title={t("toolbar.statTitle", { n: words })} aria-label={t("toolbar.statAria", { n: words, m: minutes })}>
           <span className="stat-num">{words >= 1000 ? `${(words / 1000).toFixed(1)}k` : words}</span>
           <span className="stat-sep">/</span>
           <span className="stat-min">{minutes}m</span>
         </button>
-        <button className="tbar-btn" onClick={onNew} title="New (⌘N)" aria-label="新建文档">
+        <button className="tbar-btn" onClick={onNew} title={t("toolbar.new")} aria-label={t("toolbar.new")}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
             <line x1="7.5" y1="2" x2="7.5" y2="13" />
             <line x1="2" y1="7.5" x2="13" y2="7.5" />
           </svg>
         </button>
-        <button className="tbar-btn" onClick={onOpen} title="Open (⌘O)" aria-label="打开文件">
+        <button className="tbar-btn" onClick={onOpen} title={t("toolbar.open")} aria-label={t("toolbar.open")}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
             <path d="M2 4h4l1.5 1.5H12a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
           </svg>
@@ -121,8 +123,8 @@ export const Toolbar = memo(function Toolbar({
         <button
           className={`tbar-btn ${modified ? "has-action" : ""}`}
           onClick={onSave}
-          title="Save (⌘S)"
-          aria-label="保存"
+          title={t("toolbar.save")}
+          aria-label={t("toolbar.save")}
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
             <path d="M3 1v5h8V1M3 14v-4h9v4" />
@@ -132,8 +134,8 @@ export const Toolbar = memo(function Toolbar({
         <button
           className="tbar-btn"
           onClick={onFindReplace}
-          title="Find (⌘F)"
-          aria-label="查找替换"
+          title={t("toolbar.find")}
+          aria-label={t("toolbar.find")}
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
             <circle cx="6.5" cy="6.5" r="4" />
@@ -143,8 +145,8 @@ export const Toolbar = memo(function Toolbar({
         <button
           className="tbar-btn"
           onClick={onExportPdf}
-          title="Export PDF (⌘⇧P)"
-          aria-label="导出 PDF"
+          title={t("toolbar.exportPdf")}
+          aria-label={t("toolbar.exportPdf")}
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
             <line x1="7.5" y1="2" x2="7.5" y2="9" />
@@ -157,7 +159,7 @@ export const Toolbar = memo(function Toolbar({
             className={`tbar-btn ${frontmatterOpen ? "active" : ""}`}
             onClick={onToggleInfo}
             title="Info"
-            aria-label="文档信息"
+            aria-label={t("toolbar.info")}
           >
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
               <circle cx="7.5" cy="7.5" r="5.5" />
@@ -166,7 +168,7 @@ export const Toolbar = memo(function Toolbar({
             </svg>
           </button>
         )}
-        <button className="tbar-btn theme-btn" onClick={onToggleTheme} title="Toggle theme" aria-label="切换日夜模式">
+        <button className="tbar-btn theme-btn" onClick={onToggleTheme} title={t("toolbar.theme")} aria-label={t("toolbar.theme")}>
           <svg className="icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
             <circle cx="7" cy="7" r="3" />
             <line x1="7" y1="1" x2="7" y2="2.5" strokeLinecap="round" />

@@ -77,36 +77,52 @@ export function parseMarkdown(src: string): string {
   return parseDocument(src).html;
 }
 
+/**
+ * 只对代码之外的文本段应用替换。奇数下标是围栏代码块/行内代码原文，保持原样。
+ * 这样 shell 里的 `$PATH:$HOME` 不会被误提取成数学公式（Typora/Obsidian 同规则）。
+ */
+function mapOutsideCode(src: string, fn: (segment: string) => string): string {
+  const parts = src.split(/(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)/g);
+  return parts.map((part, i) => (i % 2 === 1 ? part : fn(part))).join("");
+}
+
 export function parseDocument(src: string): ParseResult {
   // 1. Extract frontmatter
   const { body, frontmatter } = extractFrontmatter(src);
 
-  // 2. Extract math blocks before micromark so LaTeX doesn't get mangled
+  // 2. Extract math blocks before micromark so LaTeX doesn't get mangled.
+  //    替换只在代码块/行内代码之外的段落上进行。
   const mathStore: string[] = [];
-  let text = body.replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex) => {
-    const i = mathStore.length;
-    mathStore.push(`<div class="katex-block">${renderMath(tex, true)}</div>`);
-    return MATH_SLOT(i, true);
-  });
+  let text = mapOutsideCode(body, (seg) =>
+    seg.replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex) => {
+      const i = mathStore.length;
+      mathStore.push(`<div class="katex-block">${renderMath(tex, true)}</div>`);
+      return MATH_SLOT(i, true);
+    })
+  );
   // Inline math: $...$ (must not start/end with whitespace, must be non-empty;
   // closing $ must not be followed by a digit — pandoc's rule, so prices like
   // "$5 和 $10" are not treated as math)
-  text = text.replace(/(^|[^\\])\$(?=\S)(.+?)(?<=\S)\$(?!\$|\d)/g, (_m, pre, tex) => {
-    const i = mathStore.length;
-    mathStore.push(`<span class="katex-inline">${renderMath(tex, false)}</span>`);
-    return `${pre}${MATH_SLOT(i, false)}`;
-  });
-  // Unescape any \$ that we skipped
-  text = text.replace(/\\\$/g, "$");
+  text = mapOutsideCode(text, (seg) =>
+    seg.replace(/(^|[^\\])\$(?=\S)(.+?)(?<=\S)\$(?!\$|\d)/g, (_m, pre, tex) => {
+      const i = mathStore.length;
+      mathStore.push(`<span class="katex-inline">${renderMath(tex, false)}</span>`);
+      return `${pre}${MATH_SLOT(i, false)}`;
+    })
+  );
+  // Unescape any \$ that we skipped（代码块内的 \$ 保持字面）
+  text = mapOutsideCode(text, (seg) => seg.replace(/\\\$/g, "$"));
 
   // 3. Image resize syntax: ![alt](url =200x100)
   //    Strip "=WxH" before micromark, re-apply on the img tags after render.
   const sizeMap = new Map<string, { w: number; h: number | null }>();
-  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\s*=(\d+)(?:x(\d+))?\)/g,
-    (_m, alt: string, url: string, w: string, h: string) => {
-      sizeMap.set(url, { w: +w, h: h ? +h : null });
-      return `![${alt}](${url})`;
-    });
+  text = mapOutsideCode(text, (seg) =>
+    seg.replace(/!\[([^\]]*)\]\(([^)\s]+)\s*=(\d+)(?:x(\d+))?\)/g,
+      (_m, alt: string, url: string, w: string, h: string) => {
+        sizeMap.set(url, { w: +w, h: h ? +h : null });
+        return `![${alt}](${url})`;
+      })
+  );
 
   // 4. Parse with micromark
   const raw = micromark(text, {
