@@ -70,6 +70,16 @@
 
   /* ── Selection ───────────────────────────────────────────────── */
   --selection: rgba(255, 255, 255, 0.15);
+
+  /* ── Code syntax (GitHub Dark inspired) ──────────────────────── */
+  --code-comment: #7d8590;
+  --code-keyword: #ff7b72;
+  --code-string: #a5d6ff;
+  --code-number: #79c0ff;
+  --code-function: #d2a8ff;
+  --code-type: #ffa657;
+  --code-variable: #79c0ff;
+  --code-tag: #7ee787;
 }
 
 /* ── Light theme (inverted) ─────────────────────────────────────── */
@@ -100,6 +110,16 @@
   --scrollbar: rgba(0, 0, 0, 0.10);
   --scrollbar-hover: rgba(0, 0, 0, 0.20);
   --selection: rgba(0, 0, 0, 0.12);
+
+  /* ── Code syntax (GitHub Light inspired) ─────────────────────── */
+  --code-comment: #6e7781;
+  --code-keyword: #cf222e;
+  --code-string: #0a3069;
+  --code-number: #0550ae;
+  --code-function: #8250df;
+  --code-type: #953800;
+  --code-variable: #0550ae;
+  --code-tag: #116329;
 }
 
 /* ── Reduced motion ────────────────────────────────────────────── */

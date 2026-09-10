@@ -22,7 +22,6 @@ dist-ssr
 
 # Tauri
 src-tauri/target
-src-tauri/Cargo.lock
 
 # Build artifacts
 *.tsbuildinfo
@@ -34,3 +33,6 @@ src/.code-review-graph/graph.db
 
 # Local DMG
 *.dmg
+
+# Agent working directory
+.zcode/

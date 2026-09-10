@@ -9,27 +9,37 @@ import { FindReplace } from "./components/FindReplace";
 import { useTheme, toggleTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { parseDocument, extractHeadings, countWords, readTime, getTaskLines, parseFrontmatter, type Frontmatter } from "./services/markdown";
+import {
+  parseDocument, extractHeadings, readStats, getTaskLines, parseFrontmatter,
+  type Frontmatter,
+} from "./services/markdown";
 import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
-import { WELCOME_DOCUMENT, type ViewMode } from "./types/index";
+import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 
 const LAST_PATH_KEY = "rocktier-md-last-path";
-
-interface DocState {
-  path: string | null;
-  content: string;
-  modified: boolean;
-}
 
 function baseName(path: string): string {
   return path.split(/[/\\]/).pop() || "Untitled";
 }
 
+// Resolve a relative markdown link against the current document's directory.
+// Handles ./ and ../ segments; returns an absolute POSIX path.
+function resolvePath(base: string, rel: string): string {
+  const parts = (rel.startsWith("/") ? rel : base + rel).split("/");
+  const out: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") out.pop();
+    else out.push(part);
+  }
+  return "/" + out.join("/");
+}
+
 export default function App() {
   useTheme();
 
-  const [doc, setDoc] = useState<DocState>({
+  const [doc, setDoc] = useState<MarkdownDocument>({
     path: null,
     content: WELCOME_DOCUMENT,
     modified: false,
@@ -38,8 +48,6 @@ export default function App() {
   const [view, setView] = useState<ViewMode>("split");
   const [sidebar, setSidebar] = useState(false);
   const [toast, setToast] = useState("");
-  const [typewriterMode, setTypewriterMode] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
   const [frontmatterOpen, setFrontmatterOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const toastRef = useRef(0);
@@ -59,7 +67,7 @@ export default function App() {
   const html = parsed.html;
   const headings = useMemo(() => extractHeadings(deferredContent), [deferredContent]);
   const taskLines = useMemo(() => getTaskLines(deferredContent), [deferredContent]);
-  const words = useMemo(() => countWords(doc.content), [doc.content]);
+  const stats = useMemo(() => readStats(deferredContent), [deferredContent]);
   const frontmatterData = useMemo<Frontmatter | null>(() =>
     parsed.frontmatter ? parseFrontmatter(parsed.frontmatter) : null, [parsed.frontmatter]);
 
@@ -104,7 +112,7 @@ export default function App() {
     };
   }, [confirmDiscard]);
 
-  // Restore last-opened document on launch (极致简洁: zero-click resume)
+  // Restore last-opened document on launch (zero-click resume)
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     let cancelled = false;
@@ -132,9 +140,12 @@ export default function App() {
       const lines = d.content.split("\n");
       const i = lineNumber - 1;
       if (i >= 0 && i < lines.length && /^\s*[-*+]\s+\[[ xX]\]/.test(lines[i])) {
-        lines[i] = lines[i].replace(/(\[)[ xX](\])/, `$1${checked ? "x" : " "}$2`);
+        const next = lines[i].replace(/(\[)[ xX](\])/, `$1${checked ? "x" : " "}$2`);
+        if (next === lines[i]) return d;
+        lines[i] = next;
+        return { ...d, content: lines.join("\n"), modified: true };
       }
-      return { ...d, content: lines.join("\n"), modified: true };
+      return d;
     });
     // The textarea is controlled: React resetting value moves the caret to
     // the end, so restore the selection after the re-render commits.
@@ -210,6 +221,19 @@ export default function App() {
     setView((v) => (v === "split" ? "editor" : v === "editor" ? "preview" : "split"));
   }, []);
 
+  // PDF export prints the preview pane. If the preview is hidden, mount it
+  // first and restore the previous view when printing finishes.
+  const doExportPdf = useCallback(() => {
+    if (view !== "editor") {
+      window.print();
+      return;
+    }
+    setView("preview");
+    window.addEventListener("afterprint", () => setView("editor"), { once: true });
+    // Give React a frame to mount the preview before the print snapshot
+    window.setTimeout(() => window.print(), 120);
+  }, [view]);
+
   const shortcuts = useMemo(
     () => ({
       onSave: doSave,
@@ -217,12 +241,10 @@ export default function App() {
       onNew: doNew,
       onOpen: doOpen,
       onToggleSidebar: () => setSidebar((v) => !v),
-      onToggleTypewriter: () => setTypewriterMode((v) => !v),
-      onToggleFocus: () => setFocusMode((v) => !v),
       onFindReplace: () => setFindReplaceOpen((v) => !v),
-      onExportPdf: () => window.print(),
+      onExportPdf: doExportPdf,
     }),
-    [doSave, doSaveAs, doNew, doOpen]
+    [doSave, doSaveAs, doNew, doOpen, doExportPdf]
   );
   useKeyboardShortcuts(shortcuts);
 
@@ -235,7 +257,7 @@ export default function App() {
     const file = e.dataTransfer.files[0];
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["md","markdown","mdown","mkd","txt","text"].includes(ext)) {
+    if (!ext || !["md", "markdown", "mdown", "mkd", "txt", "text"].includes(ext)) {
       showToast("不支持的文件类型");
       return;
     }
@@ -250,25 +272,29 @@ export default function App() {
     }
   }, [confirmDiscard, rememberPath, showToast]);
 
+  // Click a cross-document link in the preview. Relative paths resolve
+  // against the current document's directory.
   const onOpenDocument = useCallback((filePath: string) => {
-    if (filePath.startsWith("/") || filePath.includes("://")) {
-      // Absolute or URL: open directly
-      if (filePath.includes("://")) return;
-      (async () => {
-        if (!(await confirmDiscard())) return;
-        try {
-          if (!(await exists(filePath))) { showToast("文件不存在"); return; }
-          const text = await readTextFile(filePath);
-          setDoc({ path: filePath, content: text, modified: false });
-          rememberPath(filePath);
-        } catch { showToast("无法打开文件"); }
-      })();
-    } else {
-      // Relative path: resolve against current document's directory
-      const base = doc.path?.replace(/[^/]+$/, "") ?? "";
-      const resolved = base + filePath;
-      onOpenDocument(resolved);
-    }
+    (async () => {
+      if (!(await confirmDiscard())) return;
+      let target = filePath;
+      if (!target.startsWith("/")) {
+        const base = docRef.current.path?.replace(/[^/]+$/, "") ?? "";
+        if (!base) {
+          showToast("无法解析相对路径");
+          return;
+        }
+        target = resolvePath(base, target);
+      }
+      try {
+        if (!(await exists(target))) { showToast("文件不存在"); return; }
+        const text = await readTextFile(target);
+        setDoc({ path: target, content: text, modified: false });
+        rememberPath(target);
+      } catch {
+        showToast("无法打开文件");
+      }
+    })();
   }, [confirmDiscard, rememberPath, showToast]);
 
   return (
@@ -282,20 +308,17 @@ export default function App() {
         onSave={doSave}
         modified={doc.modified}
         displayName={displayName}
-        words={words}
-        minutes={readTime(doc.content)}
+        words={stats.words}
+        minutes={stats.minutes}
         onToggleTheme={toggleTheme}
-        typewriterMode={typewriterMode}
-        onToggleTypewriter={() => setTypewriterMode((v) => !v)}
-        focusMode={focusMode}
-        onToggleFocus={() => setFocusMode((v) => !v)}
         onFindReplace={() => setFindReplaceOpen((v) => !v)}
-        onExportPdf={() => window.print()}
+        onExportPdf={doExportPdf}
         hasFrontmatter={hasFrontmatter}
         frontmatterOpen={frontmatterOpen}
         onToggleInfo={() => setFrontmatterOpen((v) => !v)}
       />
-      <div className={`app-body ${typewriterMode ? "typewriter-mode" : ""} ${focusMode ? "focus-mode" : ""}`}
+      <div
+        className="app-body"
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
@@ -324,7 +347,6 @@ export default function App() {
             <Editor
               content={doc.content}
               onChange={onChange}
-              path={doc.path ?? undefined}
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
               onImagePaste={() => showToast("图片已插入")}

@@ -235,17 +235,9 @@
   position: relative;
 }
 
-/* ── Code Block Line Numbers ────────────────────────────────────────
-   Assumes highlight.js wraps each line in a span per line
-   (data-ln / .hljs-ln-line) or we target each code line element.
-   Uses CSS counters for auto-numbering. */
+/* ── Code block language badge (from code[data-lang], set by highlightCode) */
 
-.md-viewer pre.code-block {
-  counter-reset: line;
-  padding-left: 3.8em;
-}
-
-.md-viewer pre.code-block::before {
+.md-viewer pre code[data-lang]::before {
   content: attr(data-lang);
   position: absolute;
   top: 0.5em;
@@ -256,32 +248,6 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   pointer-events: none;
-}
-
-.md-viewer pre.code-block code {
-  background: none;
-  padding: 0;
-  font-size: inherit;
-  border: none;
-  border-radius: 0;
-  tab-size: 2;
-  display: block;
-}
-
-.md-viewer pre.code-block .hljs-ln-line::before,
-.md-viewer pre.code-block code > span[data-ln]::before,
-.md-viewer pre.code-block .line::before {
-  counter-increment: line;
-  content: counter(line);
-  display: inline-block;
-  width: 2.6em;
-  margin-left: -3.2em;
-  margin-right: 0.6em;
-  text-align: right;
-  color: var(--text-muted);
-  font-size: 0.85em;
-  user-select: none;
-  -webkit-user-select: none;
 }
 
 /* ── Tables ──────────────────────────────────────────────────────── */
@@ -361,67 +327,98 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Highlight.js Theme (Nothing adjusted — subtle, monochrome+accent)
+   Highlight.js Theme (GitHub Dark/Light inspired — real hue contrast)
+   Mapped through --code-* tokens for both themes.
    ═══════════════════════════════════════════════════════════════════ */
 
 .hljs {
   color: var(--text-primary);
+  background: transparent;
 }
 
 .hljs-comment,
 .hljs-quote {
-  color: var(--text-muted);
+  color: var(--code-comment);
   font-style: italic;
 }
 
+/* Keywords & control flow */
 .hljs-keyword,
 .hljs-selector-tag,
-.hljs-literal,
-.hljs-type,
-.hljs-tag {
-  color: var(--text-primary);
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+  color: var(--code-keyword);
   font-weight: 600;
 }
 
+/* Strings, regex, diff additions */
 .hljs-string,
-.hljssubst,
-.hljs-title,
-.hljs-section,
-.hljs-class .hljs-title {
-  color: var(--text-secondary);
-}
-
-.hljs-number,
 .hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+
+/* Numbers, constants, links */
+.hljs-number,
+.hljs-literal,
 .hljs-symbol,
-.hljs-variable,
-.hljs-template-variable,
-.hljs-tag .hljs-attr {
-  color: var(--text-primary);
+.hljs-link {
+  color: var(--code-number);
 }
 
+/* Function & method names (hljs v11 scoped + legacy) */
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--code-function);
+}
+
+/* Types, classes, builtins */
+.hljs-title.class_,
+.hljs-type,
 .hljs-built_in,
-.hljs-builtin-name,
-.hljs-function,
-.hljs-name {
-  color: var(--text-primary);
+.hljs-class .hljs-title {
+  color: var(--code-type);
 }
 
+.hljs-section {
+  color: var(--code-function);
+  font-weight: 600;
+}
+
+/* Variables & attributes */
 .hljs-attr,
-.hljs-attribute {
-  color: var(--text-secondary);
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--code-variable);
 }
 
-.hljs-meta,
-.hljs-doctag,
-.hljs-bullet,
-.hljs-code,
-.hljs-addition,
-.hljs-deletion,
+/* Markup tag names (xml/html) */
+.hljs-name,
+.hljs-tag {
+  color: var(--code-tag);
+}
+
+/* CSS selectors */
 .hljs-selector-id,
 .hljs-selector-class,
-.hljs-selector-pseudo {
-  color: var(--text-tertiary);
+.hljs-selector-pseudo,
+.hljs-selector-attr {
+  color: var(--code-type);
+}
+
+/* Meta info, diff removal */
+.hljs-meta,
+.hljs-meta .hljs-string {
+  color: var(--code-comment);
+}
+
+.hljs-deletion {
+  color: var(--code-keyword);
+}
+
+.hljs-subst {
+  color: var(--text-primary);
 }
 
 .hljs-emphasis {
@@ -433,8 +430,31 @@
 }
 
 /* ── Print ───────────────────────────────────────────────────────── */
+/* Print / export PDF: only the rendered preview. The editor pane, chrome
+   and overlays are hidden, and all scrolling containers are expanded so
+   long documents are not clipped to the viewport. */
 
 @media print {
+  .toolbar,
+  .sidebar,
+  .sidebar-overlay,
+  .editor-pane,
+  .find-replace-bar,
+  .frontmatter-panel,
+  .toast {
+    display: none !important;
+  }
+
+  .app-shell,
+  .app-body,
+  .editor-container,
+  .preview-pane,
+  .preview-scroll {
+    display: block;
+    overflow: visible;
+    height: auto;
+  }
+
   .md-viewer {
     max-width: none;
     padding: 0;
@@ -444,33 +464,5 @@
 
   .md-viewer pre {
     white-space: pre-wrap;
-    print-color-adjust: economic;
-    -webkit-print-color-adjust: economic;
-  }
-
-  /* Hide UI chrome */
-  .toolbar,
-  .sidebar,
-  .app-titlebar,
-  .toast,
-  .word-count,
-  .char-count,
-  .stat,
-  .doc-pill,
-  .view-switch,
-  .sidebar-overlay {
-    display: none !important;
-  }
-
-  /* Expand content panes for print */
-  .editor-pane,
-  .preview-pane {
-    display: none !important;
-  }
-
-  .print-content {
-    display: block !important;
-    width: 100%;
-    padding: 0;
   }
 }

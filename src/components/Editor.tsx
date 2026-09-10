@@ -3,10 +3,9 @@ import { memo, useCallback, useRef, type RefObject } from "react";
 interface Props {
   content: string;
   onChange: (content: string) => void;
-  path?: string;
   textareaRef?: RefObject<HTMLTextAreaElement>;
   onScroll?: () => void;
-  onImagePaste?: (dataUrl: string) => void;
+  onImagePaste?: () => void;
 }
 
 const INDENT = "  ";
@@ -17,6 +16,18 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
 
   const onInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value);
+  }, [onChange]);
+
+  // Splice text into the textarea. execCommand("insertText") keeps the native
+  // undo stack intact — assigning el.value directly would wipe it.
+  const splice = useCallback((el: HTMLTextAreaElement, from: number, to: number, text: string) => {
+    el.focus();
+    el.setSelectionRange(from, to);
+    if (!document.execCommand("insertText", false, text)) {
+      el.value = el.value.slice(0, from) + text + el.value.slice(to);
+      el.setSelectionRange(from + text.length, from + text.length);
+    }
+    onChange(el.value);
   }, [onChange]);
 
   const onKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -30,74 +41,62 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
       // Multi-line selection: indent / outdent every line in the block
       if (s !== end && value.slice(s, end).includes("\n")) {
         const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-        const shifted = value
+        const block = value
           .slice(lineStart, end)
           .split("\n")
           .map((line) => {
             if (e.shiftKey) {
-              if (line.startsWith(INDENT)) {
-                return line.slice(INDENT.length);
-              }
-              return line;
+              return line.startsWith(INDENT) ? line.slice(INDENT.length) : line;
             }
             return INDENT + line;
           })
           .join("\n");
-        el.value = value.slice(0, lineStart) + shifted + value.slice(end);
-        el.selectionStart = lineStart;
-        el.selectionEnd = lineStart + shifted.length;
-        onChange(el.value);
+        splice(el, lineStart, end, block);
+        el.setSelectionRange(lineStart, lineStart + block.length);
         return;
       }
 
       if (e.shiftKey) {
-        const before = value.substring(0, s);
-        const nl = before.lastIndexOf("\n");
-        const ls = nl + 1;
-        if (value.substring(ls, ls + INDENT.length) === INDENT) {
-          el.value = value.substring(0, ls) + value.substring(ls + INDENT.length);
-          el.selectionStart = el.selectionEnd = Math.max(ls, s - INDENT.length);
+        const nl = value.lastIndexOf("\n", s - 1) + 1;
+        if (value.slice(nl, nl + INDENT.length) === INDENT) {
+          splice(el, nl, nl + INDENT.length, "");
+          const caret = Math.max(nl, s - INDENT.length);
+          el.setSelectionRange(caret, caret);
         }
       } else {
-        el.value = value.substring(0, s) + INDENT + value.substring(end);
-        el.selectionStart = el.selectionEnd = s + INDENT.length;
+        splice(el, s, end, INDENT);
       }
-      onChange(el.value);
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && el.selectionStart === el.selectionEnd) {
       const s = el.selectionStart;
-      const before = el.value.substring(0, s);
+      const before = el.value.slice(0, s);
       const nl = before.lastIndexOf("\n") + 1;
-      const line = before.substring(nl);
-      if (line.match(/^\s*[-*+]\s+$/)) {
+      const line = before.slice(nl);
+
+      // Empty list marker alone on the line: exit the list
+      if (/^\s*[-*+]\s+$/.test(line) || /^\s*[-*+]\s+\[[ xX]\]\s*$/.test(line)) {
         e.preventDefault();
-        el.value = el.value.substring(0, nl) + "\n" + el.value.substring(s);
-        el.selectionStart = el.selectionEnd = nl + 1;
-        onChange(el.value);
+        splice(el, nl, s, "");
         return;
       }
-      const m = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
-      if (m && m[3].trim() !== "") {
+      // GFM task item first — the generic list regex would also match it
+      const task = line.match(/^(\s*)([-*+])\s+\[[ xX]\]\s+(.+)$/);
+      if (task) {
         e.preventDefault();
-        const nm = /^\d+/.test(m[2]) ? `${parseInt(m[2]) + 1}. ` : `${m[2]} `;
-        const ins = `\n${m[1]}${nm}`;
-        el.value = el.value.substring(0, s) + ins + el.value.substring(el.selectionEnd);
-        el.selectionStart = el.selectionEnd = s + ins.length;
-        onChange(el.value);
+        splice(el, s, s, `\n${task[1]}${task[2]} [ ] `);
+        return;
       }
-      // GFM task list continuation
-      const tline = line.match(/^(\s*)([-*+])\s+\[[ xX]\]\s+(.*)$/);
-      if (tline && tline[4].trim() !== "") {
+      // Plain / ordered list continuation
+      const list = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/);
+      if (list) {
         e.preventDefault();
-        const ins = `\n${tline[1]}${tline[2]}[ ] `;
-        el.value = el.value.substring(0, s) + ins + el.value.substring(el.selectionEnd);
-        el.selectionStart = el.selectionEnd = s + ins.length;
-        onChange(el.value);
+        const marker = /^\d+/.test(list[2]) ? `${parseInt(list[2], 10) + 1}. ` : `${list[2]} `;
+        splice(el, s, s, `\n${list[1]}${marker}`);
         return;
       }
     }
-  }, [onChange]);
+  }, [onChange, splice]);
 
   const onPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
@@ -118,7 +117,7 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
           el.value = el.value.substring(0, s) + md + el.value.substring(end);
           el.selectionStart = el.selectionEnd = s + md.length;
           onChange(el.value);
-          onImagePaste?.(dataUrl);
+          onImagePaste?.();
         };
         reader.readAsDataURL(blob);
         return;

@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import "katex/dist/katex.min.css";
+import "./styles/katex-woff2.css";
 import "./styles/tokens.css";
 import "./styles/global.css";
 import "./styles/app.css";

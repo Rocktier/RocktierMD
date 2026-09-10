@@ -16,9 +16,17 @@ tauri-build = { version = "2.0.0", features = [] }
 tauri = { version = "2.0", features = [] }
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"
-serde = { version = "1.0", features = ["derive"] }
+# Required by tauri::generate_context! (macro references ::serde_json directly)
 serde_json = "1.0"
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Size- and startup-optimized release binary
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -32,63 +32,54 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
   const ref = previewRef || internalRef;
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const root = ref.current;
+    if (!root) return;
 
-    applyHeadingIds(el);
+    applyHeadingIds(root);
 
-    // Handle task checkboxes — write back to source. Only GFM task items are
-    // bound (they render with `disabled`); raw-HTML checkboxes in the source
-    // must not shift the index mapping.
-    if (onToggleTask) {
-      const cbs = el.querySelectorAll<HTMLInputElement>('.md-viewer input[type="checkbox"][disabled]');
-      cbs.forEach((cb, idx) => {
-        const newCb = cb.cloneNode(true) as HTMLInputElement;
-        cb.replaceWith(newCb);
-        newCb.disabled = false;
-        newCb.addEventListener("change", () => {
-          // Use source line number if available, otherwise fall back to index
-          const line = taskLines && taskLines[idx] ? taskLines[idx] : idx + 1;
-          onToggleTask(line, newCb.checked);
-        });
-      });
-    }
-
-    // Smooth scroll for anchor links
-    el.querySelectorAll('.md-viewer a[href^="#"]').forEach((a) => {
-      const clone = a.cloneNode(true);
-      a.replaceWith(clone);
-      clone.addEventListener("click", (e) => {
-        e.preventDefault();
-        const id = (clone as HTMLAnchorElement).getAttribute("href")?.slice(1);
-        if (id) {
-          const target = el.querySelector(`#${CSS.escape(id)}`);
-          target?.scrollIntoView({ behavior: "smooth" });
-        }
-      });
+    // Enable GFM task checkboxes (micromark renders them disabled so raw-HTML
+    // checkboxes in the source stay inert) and mark ours for the delegate.
+    const cbs = root.querySelectorAll<HTMLInputElement>('.md-viewer input[type="checkbox"][disabled]');
+    cbs.forEach((cb) => {
+      cb.disabled = false;
+      cb.dataset.rocktierTask = "1";
     });
 
-    // Intercept cross-document links (.md / .markdown) when a handler is provided
-    if (onOpenDocument) {
-      el.querySelectorAll('.md-viewer a[href]').forEach((a) => {
-        const href = (a as HTMLAnchorElement).getAttribute("href") || "";
-        // Skip pure anchors, web/mailto links
-        if (href.startsWith("#") || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:")) {
-          return;
-        }
-        // Only intercept .md / .markdown paths
-        if (!/\.(md|markdown)$/i.test(href)) {
-          return;
-        }
-        const clone = a.cloneNode(true) as HTMLAnchorElement;
-        a.replaceWith(clone);
-        clone.addEventListener("click", (e) => {
-          e.preventDefault();
-          onOpenDocument(href);
-        });
-      });
-    }
-  }, [html, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Single delegated click handler for anchor links (in-document + .md files)
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest("a");
+      if (!a) return;
+      const href = a.getAttribute("href") || "";
+      if (href.startsWith("#")) {
+        e.preventDefault();
+        const target = root.querySelector(`#${CSS.escape(href.slice(1))}`);
+        target?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      if (onOpenDocument && /\.(md|markdown)$/i.test(href) && !/^(https?:|mailto:)/.test(href)) {
+        e.preventDefault();
+        onOpenDocument(href);
+      }
+    };
+
+    // Toggle events bubble — one delegated listener writes back to the source.
+    const onCheckboxChange = (e: Event) => {
+      const cb = e.target as HTMLInputElement;
+      if (!onToggleTask || cb.type !== "checkbox" || !cb.dataset.rocktierTask) return;
+      const bound = root.querySelectorAll<HTMLInputElement>("input[data-rocktier-task]");
+      const idx = Array.prototype.indexOf.call(bound, cb);
+      if (idx === -1) return;
+      const line = taskLines && taskLines[idx] ? taskLines[idx] : idx + 1;
+      onToggleTask(line, cb.checked);
+    };
+
+    root.addEventListener("click", onClick);
+    root.addEventListener("change", onCheckboxChange);
+    return () => {
+      root.removeEventListener("click", onClick);
+      root.removeEventListener("change", onCheckboxChange);
+    };
+  }, [html, taskLines, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="preview-pane">

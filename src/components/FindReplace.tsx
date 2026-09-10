@@ -108,7 +108,7 @@ export const FindReplace = memo(function FindReplace({
 
       // Scroll into view: compute line number by counting \n before match
       const line = content.substring(0, start).split("\n").length - 1;
-      const lineHeight = 22;
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22;
       const targetScroll = line * lineHeight - el.clientHeight / 3;
       el.scrollTop = Math.max(0, targetScroll);
     },
@@ -205,7 +205,8 @@ export const FindReplace = memo(function FindReplace({
           el.setSelectionRange(s, end);
           // Scroll into view
           const line = newContent.substring(0, s).split("\n").length - 1;
-          el.scrollTop = Math.max(0, line * 22 - el.clientHeight / 3);
+          const lh = parseFloat(getComputedStyle(el).lineHeight) || 22;
+          el.scrollTop = Math.max(0, line * lh - el.clientHeight / 3);
         } else {
           setMatchIndex(0);
         }

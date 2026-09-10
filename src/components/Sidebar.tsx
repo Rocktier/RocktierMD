@@ -45,27 +45,10 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
 
           {headings.length > 0 && (
             <div className="sidebar-section">
-              <div
-                className="sidebar-head"
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-              >
-                <h3 style={{ margin: 0 }}>Outline</h3>
+              <div className="sidebar-head">
+                <h3>Outline</h3>
                 <button
-                  style={{
-                    width: 20,
-                    height: 20,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    borderRadius: 6,
-                    background: "rgba(255,255,255,0.06)",
-                    color: "rgba(255,255,255,0.60)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    cursor: "pointer",
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
+                  className="toc-collapse"
                   onClick={() => setCollapsed((c) => !c)}
                   aria-label={collapsed ? "Expand TOC" : "Collapse TOC"}
                 >
@@ -76,21 +59,10 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
                 <>
                   <input
                     type="text"
+                    className="toc-filter"
                     placeholder="Filter headings..."
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 8,
-                      color: "rgba(255,255,255,0.70)",
-                      fontSize: 12,
-                      padding: "5px 10px",
-                      outline: "none",
-                      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif",
-                    }}
                   />
                   <nav className="toc">
                     {filtered.map((h, i) => (
@@ -121,6 +93,8 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
               <div className="row"><span className="key">⌘ O</span><span className="desc">Open</span></div>
               <div className="row"><span className="key">⌘ S</span><span className="desc">Save</span></div>
               <div className="row"><span className="key">⌘ ⇧ S</span><span className="desc">Save as</span></div>
+              <div className="row"><span className="key">⌘ F</span><span className="desc">Find</span></div>
+              <div className="row"><span className="key">⌘ ⇧ P</span><span className="desc">Export PDF</span></div>
               <div className="row"><span className="key">⌘ \</span><span className="desc">Sidebar</span></div>
               <div className="row"><span className="key">Tab</span><span className="desc">Indent</span></div>
             </div>

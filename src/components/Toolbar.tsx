@@ -13,10 +13,6 @@ interface Props {
   words: number;
   minutes: number;
   onToggleTheme: () => void;
-  typewriterMode: boolean;
-  onToggleTypewriter: () => void;
-  focusMode: boolean;
-  onToggleFocus: () => void;
   onFindReplace: () => void;
   onExportPdf: () => void;
   hasFrontmatter: boolean;
@@ -36,10 +32,6 @@ export const Toolbar = memo(function Toolbar({
   words,
   minutes,
   onToggleTheme,
-  typewriterMode,
-  onToggleTypewriter,
-  focusMode,
-  onToggleFocus,
   onFindReplace,
   onExportPdf,
   hasFrontmatter,
@@ -135,29 +127,6 @@ export const Toolbar = memo(function Toolbar({
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
             <path d="M3 1v5h8V1M3 14v-4h9v4" />
             <path d="M1 6v8h13V6" />
-          </svg>
-        </button>
-        <button
-          className={`tbar-btn ${typewriterMode ? "active" : ""}`}
-          onClick={onToggleTypewriter}
-          title="Typewriter (⌘⇧T)"
-          aria-label="打字机模式"
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-            <line x1="2" y1="4" x2="13" y2="4" />
-            <line x1="2" y1="7.5" x2="13" y2="7.5" strokeWidth="2" />
-            <line x1="2" y1="11" x2="13" y2="11" />
-          </svg>
-        </button>
-        <button
-          className={`tbar-btn ${focusMode ? "active" : ""}`}
-          onClick={onToggleFocus}
-          title="Focus (⌘⇧F)"
-          aria-label="聚焦模式"
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-            <circle cx="7.5" cy="7.5" r="2.5" />
-            <circle cx="7.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
           </svg>
         </button>
         <button

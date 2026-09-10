@@ -6,22 +6,27 @@
 set -euo pipefail
 
 APP_NAME="Rocktier Markdown"
-DMG_NAME="Rocktier Markdown_0.1.0_aarch64.dmg"
 WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
 APP_BUNDLE="$WORKSPACE/src-tauri/target/release/bundle/macos/$APP_NAME.app"
 ICON="$APP_BUNDLE/Contents/Resources/icon.icns"
-OUTPUT_DMG="$WORKSPACE/$DMG_NAME"
+
+# 版本号取自 tauri.conf.json，架构自动识别 — 多版本互不覆盖
+VERSION="$(/usr/bin/sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$WORKSPACE/src-tauri/tauri.conf.json" | head -1)"
+ARCH="$(uname -m)"
+[[ "$ARCH" == "arm64" ]] && ARCH="aarch64"
+DMG_NAME="${APP_NAME}_${VERSION}_${ARCH}.dmg"
+
+# 打包产物统一只放下载文件夹（用完即删，不在项目内留冗余）
+OUTPUT_DMG="$HOME/Downloads/$DMG_NAME"
 
 if ! command -v create-dmg &>/dev/null; then
   echo "❌ 未找到 create-dmg，请 brew install create-dmg"
   exit 1
 fi
 
-echo "==> Step 1: 构建 release app..."
+echo "==> Step 1: 构建 release app（tauri build 会先执行 npm run build）..."
 cd "$WORKSPACE"
-npm run build
-cd "$WORKSPACE/src-tauri"
- cargo tauri build
+npm run tauri:build
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
   echo "❌ 构建失败: 找不到 $APP_BUNDLE"

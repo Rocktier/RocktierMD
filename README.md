@@ -52,6 +52,8 @@ npm run tauri:build
 | `⌘ O`          | Open file           |
 | `⌘ S`          | Save                |
 | `⌘ ⇧ S`        | Save as             |
+| `⌘ F`          | Find & replace      |
+| `⌘ ⇧ P`        | Export PDF          |
 | `⌘ \`          | Toggle sidebar      |
 | `Tab`          | Indent             |
 | `Shift+Tab`    | Outdent            |

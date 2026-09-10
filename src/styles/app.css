@@ -440,11 +440,50 @@
   flex-shrink: 0;
 }
 
-.sidebar-empty {
+.sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-head h3 {
+  margin: 0;
+}
+
+.toc-collapse {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  background: var(--accent-muted);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.toc-collapse:hover {
+  background: var(--accent-hover);
+  color: var(--text-primary);
+}
+
+.toc-filter {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--accent-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
   font-size: 12px;
-  color: var(--text-muted);
-  padding: 4px 8px;
-  font-style: italic;
+  padding: 5px 10px;
+  outline: none;
+}
+
+.toc-filter:focus {
+  border-color: var(--border-mid);
 }
 
 .shortcuts {
@@ -565,86 +604,6 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Typewriter Mode & Focus Mode
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ── Typewriter Mode ───────────────────────────────────────────── */
-/* Highlights the current line being typed with a subtle gradient.
-   The active line gets a soft background highlight. */
-
-.typewriter-mode .md-viewer p {
-  transition: background-color var(--dur-normal) var(--ease);
-}
-
-.typewriter-mode .md-viewer p:hover,
-.typewriter-mode .md-viewer p:focus-within,
-.typewriter-mode .md-viewer p.is-active-line {
-  background: linear-gradient(
-    to right,
-    transparent 0%,
-    rgba(255, 255, 255, 0.03) 15%,
-    rgba(255, 255, 255, 0.05) 50%,
-    rgba(255, 255, 255, 0.03) 85%,
-    transparent 100%
-  );
-}
-
-[data-theme="light"] .typewriter-mode .md-viewer p:hover,
-[data-theme="light"] .typewriter-mode .md-viewer p:focus-within,
-[data-theme="light"] .typewriter-mode .md-viewer p.is-active-line {
-  background: linear-gradient(
-    to right,
-    transparent 0%,
-    rgba(0, 0, 0, 0.02) 15%,
-    rgba(0, 0, 0, 0.04) 50%,
-    rgba(0, 0, 0, 0.02) 85%,
-    transparent 100%
-  );
-}
-
-/* ── Focus Mode ────────────────────────────────────────────────── */
-/* Dim non-focused paragraphs to reduce distraction. Focused/hovered
-   paragraphs return to full opacity. */
-
-.focus-mode .md-viewer p {
-  opacity: 0.35;
-  transition: opacity var(--dur-normal) var(--ease);
-}
-
-.focus-mode .md-viewer p:hover,
-.focus-mode .md-viewer p:focus-within,
-.focus-mode .md-viewer p.is-focused {
-  opacity: 1;
-}
-
-/* Maintain readability for nested elements inside focused paragraphs */
-.focus-mode .md-viewer p:hover > *,
-.focus-mode .md-viewer p:focus-within > *,
-.focus-mode .md-viewer p.is-focused > * {
-  opacity: 1;
-}
-
-/* Focus mode — also dim adjacent headings for visual hierarchy */
-.focus-mode .md-viewer h1,
-.focus-mode .md-viewer h2,
-.focus-mode .md-viewer h3,
-.focus-mode .md-viewer h4,
-.focus-mode .md-viewer h5,
-.focus-mode .md-viewer h6 {
-  opacity: 0.5;
-  transition: opacity var(--dur-normal) var(--ease);
-}
-
-.focus-mode .md-viewer h1:hover,
-.focus-mode .md-viewer h2:hover,
-.focus-mode .md-viewer h3:hover,
-.focus-mode .md-viewer h4:hover,
-.focus-mode .md-viewer h5:hover,
-.focus-mode .md-viewer h6:hover {
-  opacity: 1;
-}
-
-/* ═══════════════════════════════════════════════════════════════════
    Frontmatter Info Panel
    ═══════════════════════════════════════════════════════════════════ */
 
@@ -655,19 +614,15 @@
   width: 260px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--surface-elev, rgba(20, 20, 20, 0.95));
-  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  background: var(--bg-floating);
+  border: 1px solid var(--border-mid);
   border-radius: var(--radius-md, 8px);
   padding: 14px 16px;
   z-index: 50;
   backdrop-filter: blur(10px);
   font-size: 13px;
-  color: var(--text-muted, rgba(255,255,255,0.6));
+  color: var(--text-secondary);
   animation: slideIn var(--dur-normal) var(--ease);
-}
-
-[data-theme="light"] .frontmatter-panel {
-  background: rgba(255, 255, 255, 0.96);
 }
 
 .fm-header {
@@ -681,7 +636,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text, rgba(255,255,255,0.85));
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -695,7 +650,7 @@
   line-height: 1;
 }
 
-.fm-close:hover { color: var(--text); }
+.fm-close:hover { color: var(--text-secondary); }
 
 .fm-body {
   display: grid;
@@ -707,14 +662,14 @@
 .fm-body dt {
   font-size: 11px;
   text-transform: uppercase;
-  letter-height: 0.06em;
-  color: var(--text-muted, rgba(255,255,255,0.45));
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
   align-self: start;
 }
 
 .fm-body dd {
   margin: 0;
-  color: var(--text, rgba(255,255,255,0.85));
+  color: var(--text-secondary);
   word-break: break-word;
 }
 

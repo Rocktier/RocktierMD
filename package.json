@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -21,7 +21,6 @@
     "katex": "^0.18.7",
     "micromark": "^4.0.0",
     "micromark-extension-gfm": "^3.0.0",
-    "micromark-extension-gfm-footnote": "^2.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

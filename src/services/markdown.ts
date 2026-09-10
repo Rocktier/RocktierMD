@@ -1,38 +1,72 @@
 // Markdown parsing + syntax highlighting
 import { micromark } from "micromark";
 import { gfm, gfmHtml } from "micromark-extension-gfm";
-import { gfmFootnote, gfmFootnoteHtml } from "micromark-extension-gfm-footnote";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
 import katex from "katex";
 
-// Minimal language set for 极致快: 5 core languages, ~80KB vs ~350KB full
+// Minimal language set for 极致快: 20 common languages, GitHub-style coverage
+// without heavyweight grammars (php/ruby/swift 等 omitted on size grounds)
 import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
 import python from "highlight.js/lib/languages/python";
 import bash from "highlight.js/lib/languages/bash";
 import json from "highlight.js/lib/languages/json";
+import rust from "highlight.js/lib/languages/rust";
+import c from "highlight.js/lib/languages/c";
+import cpp from "highlight.js/lib/languages/cpp";
+import csharp from "highlight.js/lib/languages/csharp";
+import java from "highlight.js/lib/languages/java";
+import go from "highlight.js/lib/languages/go";
+import sql from "highlight.js/lib/languages/sql";
+import xml from "highlight.js/lib/languages/xml";
+import cssLang from "highlight.js/lib/languages/css";
+import yaml from "highlight.js/lib/languages/yaml";
+import ini from "highlight.js/lib/languages/ini";
+import diff from "highlight.js/lib/languages/diff";
+import markdownLang from "highlight.js/lib/languages/markdown";
+import makefile from "highlight.js/lib/languages/makefile";
+import dockerfile from "highlight.js/lib/languages/dockerfile";
 
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("js", javascript);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("ts", typescript);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("py", python);
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("sh", bash);
-hljs.registerLanguage("shell", bash);
-hljs.registerLanguage("json", json);
+const LANGS: [string, Parameters<typeof hljs.registerLanguage>[1], string[]][] = [
+  ["javascript", javascript, ["js"]],
+  ["typescript", typescript, ["ts"]],
+  ["python", python, ["py"]],
+  ["bash", bash, ["sh", "shell", "zsh"]],
+  ["json", json, []],
+  ["rust", rust, ["rs"]],
+  ["c", c, []],
+  ["cpp", cpp, ["c++"]],
+  ["csharp", csharp, ["cs"]],
+  ["java", java, []],
+  ["go", go, ["golang"]],
+  ["sql", sql, []],
+  ["xml", xml, ["html", "svg", "vue"]],
+  ["css", cssLang, []],
+  ["yaml", yaml, ["yml"]],
+  ["ini", ini, ["toml"]],
+  ["diff", diff, []],
+  ["markdown", markdownLang, ["md"]],
+  ["makefile", makefile, []],
+  ["dockerfile", dockerfile, ["docker"]],
+];
+for (const [name, lang, aliases] of LANGS) {
+  hljs.registerLanguage(name, lang);
+  for (const alias of aliases) hljs.registerAliases(alias, { languageName: name });
+}
 
 import type { Extension } from "micromark-util-types";
 
-const EXT: Extension[] = [gfmFootnote(), gfm({ singleTilde: false })];
+const EXT: Extension[] = [gfm({ singleTilde: false })];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const HTML_EXT: any[] = [gfmFootnoteHtml(), gfmHtml()];
+const HTML_EXT: any[] = [gfmHtml()];
 
 // --- Math extraction: pull out KaTeX before micromark sees the source ----
-// Replaced after DOMPurify to avoid KaTeX HTML being sanitized away.
-const MATH_SLOT = (n: number) => `<!--__rocktier_MATH_${n}__-->`;
+// Replaced after DOMPurify to avoid KaTeX HTML being sanitized away. The slot
+// must be an element DOMPurify keeps (comments are stripped): an empty
+// div/span with a data attribute survives sanitization.
+const MATH_SLOT = (n: number, block: boolean) =>
+  block ? `<div data-rocktier-math="${n}"></div>` : `<span data-rocktier-math="${n}"></span>`;
 
 export interface ParseResult {
   html: string;
@@ -52,13 +86,15 @@ export function parseDocument(src: string): ParseResult {
   let text = body.replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex) => {
     const i = mathStore.length;
     mathStore.push(`<div class="katex-block">${renderMath(tex, true)}</div>`);
-    return MATH_SLOT(i);
+    return MATH_SLOT(i, true);
   });
-  // Inline math: $...$ (must not start/end with whitespace, must be non-empty)
-  text = text.replace(/(^|[^\\])\$(?=\S)(.+?)(?<=\S)\$(?!\$)/g, (_m, pre, tex) => {
+  // Inline math: $...$ (must not start/end with whitespace, must be non-empty;
+  // closing $ must not be followed by a digit — pandoc's rule, so prices like
+  // "$5 和 $10" are not treated as math)
+  text = text.replace(/(^|[^\\])\$(?=\S)(.+?)(?<=\S)\$(?!\$|\d)/g, (_m, pre, tex) => {
     const i = mathStore.length;
     mathStore.push(`<span class="katex-inline">${renderMath(tex, false)}</span>`);
-    return `${pre}${MATH_SLOT(i)}`;
+    return `${pre}${MATH_SLOT(i, false)}`;
   });
   // Unescape any \$ that we skipped
   text = text.replace(/\\\$/g, "$");
@@ -86,21 +122,21 @@ export function parseDocument(src: string): ParseResult {
   // 6. Re-apply image sizes (width/height attributes)
   if (sizeMap.size > 0) {
     html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*?)>/g, (_m, pre: string, url: string, post: string) => {
-      const sz = sizeMap.get(decodeURIComponent(url));
+      const sz = sizeMap.get(url) ?? sizeMap.get(decodeURIComponent(url));
       if (!sz) return _m;
       // Skip if width/height already present (raw HTML user override)
-      const hasW = /width=/.test(pre) || /width=/.test(post);
-      const hasH = /height=/.test(pre) || /height=/.test(post);
+      const hasW = /\bwidth=/.test(pre) || /\bwidth=/.test(post);
+      const hasH = /\bheight=/.test(pre) || /\bheight=/.test(post);
       const wAttr = hasW ? '' : ` width="${sz.w}"`;
       const hAttr = sz.h && !hasH ? ` height="${sz.h}"` : '';
       return `<img${pre}src="${url}"${post}${wAttr}${hAttr}>`;
     });
   }
 
-  // 7. Restore math slots after DOMPurify
-  for (let i = 0; i < mathStore.length; i++) {
-    html = html.replace(MATH_SLOT(i), mathStore[i]);
-  }
+  // 7. Restore math slots after DOMPurify. A replacer function is required:
+  // a string replacement would treat "$&" inside KaTeX output as the match.
+  html = html.replace(/<(div|span) data-rocktier-math="(\d+)"><\/\1>/g,
+    (_m, _tag: string, n: string) => mathStore[+n]);
 
   return { html, frontmatter };
 }
@@ -153,10 +189,9 @@ function highlightCode(html: string): string {
       try {
         if (hljs.getLanguage(lang)) {
           highlighted = hljs.highlight(decoded, { language: lang }).value;
-        } else if (decoded.length <= 20000) {
-          // Auto-detection is expensive; skip it for very large code blocks
-          highlighted = hljs.highlightAuto(decoded).value;
         } else {
+          // GitHub convention: unlabeled or unknown languages render as
+          // plain text — auto-detection misfires and costs a full scan.
           highlighted = escapeHtml(decoded);
         }
       } catch {
@@ -216,13 +251,22 @@ export function extractHeadings(src: string): Heading[] {
 }
 
 /**
- * Return 1-based line numbers of every GFM task-list item in the source.
- * Used to correlate rendered checkboxes back to source lines without drift.
+ * Return 1-based line numbers of source lines that micromark renders as GFM
+ * task-list checkboxes. Mirrors its acceptance (verified empirically): list
+ * marker, [ ]/[x]/[X], whitespace, then non-empty content — so empty markers
+ * like "- [ ] " are excluded and the rendered-checkbox order stays aligned
+ * with this list for index-based mapping. Fenced code blocks are skipped.
  */
 export function getTaskLines(src: string): number[] {
   const lines: number[] = [];
+  let inCodeBlock = false;
   src.split("\n").forEach((line, idx) => {
-    if (/^\s*[-*+]\s+\[[ xX]\]/.test(line)) lines.push(idx + 1);
+    if (/^\s*(```|~~~)/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+    if (inCodeBlock) return;
+    if (/^\s*(>\s*)*[-*+]\s+\[[ xX]\]\s+\S/.test(line)) lines.push(idx + 1);
   });
   return lines;
 }
@@ -258,15 +302,12 @@ function wordCounts(text: string): { cn: number; en: number; total: number } {
   return { cn, en, total: cn + en };
 }
 
-export function countWords(text: string): number {
-  return wordCounts(text).total;
-}
-
-export function readTime(text: string): number {
+/** Word count + reading time in one pass over the text. */
+export function readStats(text: string): { words: number; minutes: number } {
   const { cn, total } = wordCounts(text);
-  if (total === 0) return 0;
+  if (total === 0) return { words: 0, minutes: 0 };
   // Blended WPM: pure English → 350, pure Chinese → 500
   const ratio = cn / total;
   const wpm = 350 + ratio * 150;
-  return Math.max(1, Math.ceil(total / wpm));
+  return { words: total, minutes: Math.max(1, Math.ceil(total / wpm)) };
 }
