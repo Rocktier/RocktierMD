@@ -43,11 +43,24 @@
   --glow-sm: 0 0 8px rgba(255, 255, 255, 0.06);
   --glow-md: 0 0 20px rgba(255, 255, 255, 0.08);
 
-  /* ── Typography ──────────────────────────────────────────────── */
+  /* ── Typography ──────────────────────────────────────────────
+     三条栈都是「macOS 优先 + Windows 显式兜底」。Windows 上任何一项缺失时，
+     若不显式给出中文字体，WebView2 会把 CJK 回退到宋体(SimSun)，小字号下笔画
+     发虚、与拉丁字形割裂——这正是正文「阅读性差」的根因。 */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, ui-monospace, monospace;
-  --font-serif: "New York", "Songti SC", Georgia, serif;
+  /* 等宽字体两端都没有 CJK 字形，所以在 monospace 之前显式补中文无衬线兜底：
+     macOS → PingFang SC，Windows → 微软雅黑。 */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Cascadia Code",
+    Consolas, "JetBrains Mono", "Fira Code", Menlo,
+    "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", monospace;
+  /* 衬线正文：macOS 仍是 New York + Songti SC（原设计意图，零回归）；
+     Windows 无这两个字体，落到 Georgia 拉丁 + 微软雅黑中文，而不是 generic serif 的宋体。
+     装了思源宋体的机器可直接拿到纯正宋体正文。 */
+  --font-serif: "New York", "New York Small", "Songti SC",
+    "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, "Times New Roman",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
 
   /* ── Metrics ─────────────────────────────────────────────────── */
   --toolbar-h: 44px;

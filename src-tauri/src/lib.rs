@@ -2,6 +2,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -16,6 +17,46 @@ pub struct Ready(pub AtomicBool);
 pub struct CloseWatch {
     pub requested: AtomicU64,
     pub acked: AtomicU64,
+}
+
+/// 启动时要打开的文档路径，由操作系统传入：
+/// - Windows / Linux：文件关联注册的打开命令是 `"app.exe" "%1"`，路径在 argv 里；
+/// - macOS / iOS：走 `RunEvent::Opened` 事件（见 `run()`）。冷启动时该事件可能早于
+///   前端挂载，所以先缓冲在这里，前端挂载后再用 `initial_file` 拉取。
+pub struct InitialFile(pub Mutex<Option<String>>);
+
+/// 与前端 `MARKDOWN_EXTS` 保持一致。只关联 Markdown 家族：把 txt/text 也抢过来
+/// 会顶掉记事本等既有关联，且资源管理器「类型」列会被污染成 Markdown。
+const MARKDOWN_EXTS: [&str; 8] = [
+    "md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext",
+];
+
+fn is_markdown_path(path: &std::path::Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => MARKDOWN_EXTS.contains(&ext.to_ascii_lowercase().as_str()),
+        None => false,
+    }
+}
+
+/// 取命令行里第一个真实存在的 Markdown 文件。
+/// 更新器开关等其它参数会被 is_markdown_path 自然过滤掉。
+fn file_from_args() -> Option<String> {
+    std::env::args_os()
+        .skip(1)
+        .map(std::path::PathBuf::from)
+        .find(|p| is_markdown_path(p))
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// 前端挂载后询问「启动时是否带了文档」。
+/// 刻意只 clone 不 take：React StrictMode 在 dev 下会把 effect 跑两遍，
+/// take 会让第二次调用拿到 None，启动文件就被丢掉了。
+#[tauri::command]
+fn initial_file(state: tauri::State<InitialFile>) -> Option<String> {
+    state.0.lock().ok().and_then(|slot| slot.clone())
 }
 
 /// Destroys the main window without re-triggering CloseRequested.
@@ -153,7 +194,7 @@ fn clear_recovery(app: tauri::AppHandle, path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
@@ -162,6 +203,8 @@ pub fn run() {
                 requested: AtomicU64::new(0),
                 acked: AtomicU64::new(0),
             });
+            // 双击关联文件启动时（Windows/Linux）路径在 argv 里，先缓冲起来。
+            app.manage(InitialFile(Mutex::new(file_from_args())));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -171,7 +214,8 @@ pub fn run() {
             git_branch,
             save_recovery,
             list_recovery,
-            clear_recovery
+            clear_recovery,
+            initial_file
         ])
         .on_window_event(|window, event| {
             // Hand the close decision to the frontend, which checks for
@@ -213,6 +257,29 @@ pub fn run() {
                 });
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, _event| {
+        // macOS / iOS 的文件关联不是命令行参数，而是一个事件（Windows 见 file_from_args）。
+        // 两种时序都要兜住：冷启动时事件可能早于前端挂载 —— 所以写进 InitialFile，
+        // 前端挂载后经 initial_file 拉取；也可能晚于挂载 —— 所以同时 emit 出去。
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let tauri::RunEvent::Opened { urls } = _event {
+            for url in urls {
+                let Ok(path) = url.to_file_path() else { continue };
+                let Some(path) = path.to_str() else { continue };
+                if !is_markdown_path(std::path::Path::new(path)) {
+                    continue;
+                }
+                if let Some(state) = _app_handle.try_state::<InitialFile>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(path.to_string());
+                    }
+                }
+                let _ = _app_handle.emit("open-file", path);
+                break;
+            }
+        }
+    });
 }

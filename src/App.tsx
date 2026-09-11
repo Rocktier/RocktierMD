@@ -157,17 +157,30 @@ export default function App() {
     if (!isTauri) return;
     let cancelled = false;
     (async () => {
-      // 1) 先恢复上次打开的文档（磁盘内容）
+      // 0) 双击关联文件启动时，OS 传来的路径优先级最高
+      //    （Windows 走 argv，macOS 走 RunEvent::Opened，两边都由 Rust 归一化）
+      let launchedWith = "";
+      try {
+        launchedWith = (await invoke<string | null>("initial_file")) || "";
+      } catch {
+        // 拉不到就当没有，继续走零点击恢复
+      }
+
+      // 1) 先恢复启动文件 / 上次打开的文档（磁盘内容）
       let restored: MarkdownDocument | null = null;
-      const raw = localStorage.getItem(LAST_PATH_KEY);
-      if (raw) {
+      const candidates = launchedWith
+        ? [launchedWith, localStorage.getItem(LAST_PATH_KEY) || ""]
+        : [localStorage.getItem(LAST_PATH_KEY) || ""];
+      for (const raw of candidates) {
+        if (!raw) continue;
         try {
           if (await exists(raw)) {
             const text = await readTextFile(raw);
             if (!cancelled) restored = { path: raw, content: text, modified: false };
+            break;
           }
         } catch {
-          // file moved or unreadable — ignore, start fresh
+          // file moved or unreadable — try the next candidate
         }
       }
 
@@ -388,6 +401,29 @@ export default function App() {
         const path = payload.paths?.[0];
         if (!path) return;
         if (disposed) return;
+        await openMarkdownPath(path);
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [openMarkdownPath]);
+
+  // 应用已在运行时再次双击关联文件：macOS 由 Rust 的 RunEvent::Opened 转成这个事件。
+  // Windows 是另起一个进程，路径走上面的启动分支，不会到这里。
+  useEffect(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .listen<string>("open-file", async (event) => {
+        const path = event.payload;
+        // 冷启动竞态：事件晚于 initial_file 到达时，文档已经是它了，别重复弹 toast
+        if (!path || path === docRef.current.path) return;
         await openMarkdownPath(path);
       })
       .then((fn) => {

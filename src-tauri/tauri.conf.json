@@ -16,6 +16,15 @@
       "icons/icon.ico"
     ],
     "resources": [],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext"],
+        "name": "Rocktier Markdown Document",
+        "description": "Markdown Document",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ],
     "copyright": "Copyright 2026 Rocktier",
     "category": "Productivity",
     "shortDescription": "Fast, elegant Markdown reader",
