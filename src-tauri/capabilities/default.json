@@ -12,7 +12,6 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
     "dialog:default",
-    "dialog:allow-ask",
     "fs:default",
     {
       "identifier": "fs:allow-read-text-file",
@@ -20,7 +19,21 @@
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "**" }]
+      "allow": [{ "path": "**" }],
+      "deny": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPCONFIG" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPDATA" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$APPLOCALDATA" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$APPCACHE" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPLOG" },
+        { "path": "**/.*" },
+        { "path": "**/.*/**" }
+      ]
     },
     {
       "identifier": "fs:allow-exists",

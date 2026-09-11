@@ -7,6 +7,7 @@ interface FindReplaceButtonProps {
   title?: string;
   children: React.ReactNode;
   bordered?: boolean;
+  active?: boolean;
 }
 
 const FindReplaceButton = memo(function FindReplaceButton({
@@ -15,6 +16,7 @@ const FindReplaceButton = memo(function FindReplaceButton({
   title,
   children,
   bordered,
+  active,
 }: FindReplaceButtonProps) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -30,7 +32,9 @@ const FindReplaceButton = memo(function FindReplaceButton({
           : "none",
         background: hovered && !disabled
           ? "var(--accent-muted, rgba(255,255,255,0.08))"
-          : "transparent",
+          : active
+            ? "var(--accent, rgba(255,255,255,0.15))"
+            : "transparent",
         cursor: !disabled ? "pointer" : "default",
         padding: bordered ? "4px 8px" : "4px 6px",
         display: "inline-flex",
@@ -69,6 +73,8 @@ export const FindReplace = memo(function FindReplace({
   const [replaceText, setReplaceText] = useState("");
   const [matchIndex, setMatchIndex] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
+  const [useRegex, setUseRegex] = useState(false);
+  const [caseSensitive, setCaseSensitive] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,31 +104,48 @@ export const FindReplace = memo(function FindReplace({
     [textareaRef, onChange]
   );
 
-  // Compute all match start indices for the current search term in content
+  // Compute all match positions for the current search term in content
+  // Returns index+length pairs so regex matches work (variable-length).
   const computeMatches = useCallback(
-    (term: string): number[] => {
+    (term: string): { index: number; length: number }[] => {
       if (!term) return [];
-      const indices: number[] = [];
-      let i = 0;
-      while (i <= content.length - term.length) {
-        const found = content.indexOf(term, i);
-        if (found === -1) break;
-        indices.push(found);
-        i = found + term.length;
+      const matches: { index: number; length: number }[] = [];
+      try {
+        if (useRegex) {
+          const flags = caseSensitive ? "g" : "gi";
+          const re = new RegExp(term, flags);
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(content)) !== null) {
+            matches.push({ index: m.index, length: m[0].length });
+            if (m.index === re.lastIndex) re.lastIndex++;
+          }
+        } else {
+          const target = caseSensitive ? content : content.toLowerCase();
+          const query = caseSensitive ? term : term.toLowerCase();
+          let i = 0;
+          while (i <= target.length - query.length) {
+            const found = target.indexOf(query, i);
+            if (found === -1) break;
+            matches.push({ index: found, length: query.length });
+            i = found + query.length;
+          }
+        }
+      } catch {
+        // regex parse failure — return no matches
       }
-      return indices;
+      return matches;
     },
-    [content]
+    [content, useRegex, caseSensitive]
   );
 
   // Select a match in the textarea and scroll into view
   const selectMatch = useCallback(
-    (indices: number[], idx: number) => {
+    (matches: { index: number; length: number }[], idx: number) => {
       const el = textareaRef.current;
-      if (!el || indices.length === 0) return;
-      const clamped = ((idx % indices.length) + indices.length) % indices.length;
-      const start = indices[clamped];
-      const end = start + searchTerm.length;
+      if (!el || matches.length === 0) return;
+      const clamped = ((idx % matches.length) + matches.length) % matches.length;
+      const start = matches[clamped].index;
+      const end = start + matches[clamped].length;
 
       el.focus();
       el.setSelectionRange(start, end);
@@ -133,7 +156,7 @@ export const FindReplace = memo(function FindReplace({
       const targetScroll = line * lineHeight - el.clientHeight / 3;
       el.scrollTop = Math.max(0, targetScroll);
     },
-    [textareaRef, searchTerm.length, content]
+    [textareaRef, content]
   );
 
   // Handle search input change
@@ -141,11 +164,11 @@ export const FindReplace = memo(function FindReplace({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const term = e.target.value;
       setSearchTerm(term);
-      const indices = computeMatches(term);
-      setMatchCount(indices.length);
-      setMatchIndex(indices.length > 0 ? 1 : 0); // show "1/N" style; we displaying as idx/total but 1-based for label
-      if (indices.length > 0) {
-        selectMatch(indices, 0);
+      const matches = computeMatches(term);
+      setMatchCount(matches.length);
+      setMatchIndex(matches.length > 0 ? 1 : 0);
+      if (matches.length > 0) {
+        selectMatch(matches, 0);
       }
     },
     [computeMatches, selectMatch]
@@ -153,38 +176,36 @@ export const FindReplace = memo(function FindReplace({
 
   // Go to next match
   const goNext = useCallback(() => {
-    const indices = computeMatches(searchTerm);
-    if (indices.length === 0) return;
-    // If current selection already matches a specific index, go from there
+    const matches = computeMatches(searchTerm);
+    if (matches.length === 0) return;
     const el = textareaRef.current;
-    let nextIndex = matchIndex % indices.length; // wrap
+    let nextIndex = matchIndex % matches.length;
     if (el) {
       const selStart = el.selectionStart;
-      // Try to find the current match index from selection
-      const foundAt = indices.indexOf(selStart);
+      const foundAt = matches.findIndex((m) => m.index === selStart);
       if (foundAt !== -1) {
-        nextIndex = (foundAt + 1) % indices.length;
+        nextIndex = (foundAt + 1) % matches.length;
       }
     }
     setMatchIndex(nextIndex + 1);
-    selectMatch(indices, nextIndex);
+    selectMatch(matches, nextIndex);
   }, [computeMatches, matchIndex, searchTerm, selectMatch, textareaRef]);
 
   // Go to previous match
   const goPrev = useCallback(() => {
-    const indices = computeMatches(searchTerm);
-    if (indices.length === 0) return;
+    const matches = computeMatches(searchTerm);
+    if (matches.length === 0) return;
     const el = textareaRef.current;
-    let prevIndex = (matchIndex - 2 + indices.length) % indices.length;
+    let prevIndex = (matchIndex - 2 + matches.length) % matches.length;
     if (el) {
       const selStart = el.selectionStart;
-      const foundAt = indices.indexOf(selStart);
+      const foundAt = matches.findIndex((m) => m.index === selStart);
       if (foundAt !== -1) {
-        prevIndex = (foundAt - 1 + indices.length) % indices.length;
+        prevIndex = (foundAt - 1 + matches.length) % matches.length;
       }
     }
     setMatchIndex(prevIndex + 1);
-    selectMatch(indices, prevIndex);
+    selectMatch(matches, prevIndex);
   }, [computeMatches, matchIndex, searchTerm, selectMatch, textareaRef]);
 
   // Replace current selection and advance
@@ -195,37 +216,62 @@ export const FindReplace = memo(function FindReplace({
     const selEnd = el.selectionEnd;
     const selectedText = content.substring(selStart, selEnd);
 
-    if (selectedText === searchTerm) {
+    // Figure out whether the current selection matches (regex-aware)
+    let isMatch = false;
+    try {
+      if (useRegex) {
+        const flags = caseSensitive ? "g" : "gi";
+        const re = new RegExp(searchTerm, flags);
+        isMatch = re.test(selectedText) && selectedText.match(re)?.[0] === selectedText;
+      } else {
+        isMatch = caseSensitive
+          ? selectedText === searchTerm
+          : selectedText.toLowerCase() === searchTerm.toLowerCase();
+      }
+    } catch {
+      isMatch = false;
+    }
+
+    if (isMatch) {
       // 经由 execCommand 改写，保留原生 undo 栈
       splice(selStart, selEnd, replaceText);
       const newContent = content.substring(0, selStart) + replaceText + content.substring(selEnd);
 
-      // The textarea value hasn't updated yet from the prop change, so use
-      // requestAnimationFrame to run after React has flushed
       requestAnimationFrame(() => {
-        const newIndices: number[] = [];
-        let i = 0;
-        while (i <= newContent.length - searchTerm.length) {
-          const f = newContent.indexOf(searchTerm, i);
-          if (f === -1) break;
-          newIndices.push(f);
-          i = f + searchTerm.length;
-        }
-        const count = newIndices.length;
-        setMatchCount(count);
+        // Recompute matches against the NEW content (stale closure otherwise)
+        let newMatches: { index: number; length: number }[] = [];
+        try {
+          if (useRegex) {
+            const flags = caseSensitive ? "g" : "gi";
+            const re = new RegExp(searchTerm, flags);
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(newContent)) !== null) {
+              newMatches.push({ index: m.index, length: m[0].length });
+              if (m.index === re.lastIndex) re.lastIndex++;
+            }
+          } else {
+            const target = caseSensitive ? newContent : newContent.toLowerCase();
+            const query = caseSensitive ? searchTerm : searchTerm.toLowerCase();
+            let i = 0;
+            while (i <= target.length - query.length) {
+              const found = target.indexOf(query, i);
+              if (found === -1) break;
+              newMatches.push({ index: found, length: query.length });
+              i = found + query.length;
+            }
+          }
+        } catch { /* regex failure */ }
+        setMatchCount(newMatches.length);
 
-        if (count > 0) {
-          // Select the next available match after the replaced position
+        if (newMatches.length > 0) {
           const nextPos = selStart + replaceText.length;
-          let nextMatchIdx = newIndices.findIndex((pos) => pos >= nextPos);
+          let nextMatchIdx = newMatches.findIndex((m) => m.index >= nextPos);
           if (nextMatchIdx === -1) nextMatchIdx = 0;
           setMatchIndex(nextMatchIdx + 1);
-          const s = newIndices[nextMatchIdx];
-          const end = s + searchTerm.length;
+          const m = newMatches[nextMatchIdx];
           el.focus();
-          el.setSelectionRange(s, end);
-          // Scroll into view
-          const line = newContent.substring(0, s).split("\n").length - 1;
+          el.setSelectionRange(m.index, m.index + m.length);
+          const line = newContent.substring(0, m.index).split("\n").length - 1;
           const lh = parseFloat(getComputedStyle(el).lineHeight) || 22;
           el.scrollTop = Math.max(0, line * lh - el.clientHeight / 3);
         } else {
@@ -236,12 +282,25 @@ export const FindReplace = memo(function FindReplace({
       // Selection doesn't match; go to next instead
       goNext();
     }
-  }, [textareaRef, searchTerm, replaceText, content, splice, goNext]);
+  }, [textareaRef, searchTerm, replaceText, content, splice, useRegex, caseSensitive, goNext]);
 
   // Replace all occurrences — 单次整体改写，Ctrl+Z / ⌘Z 一步撤销
   const doReplaceAll = useCallback(() => {
     if (!searchTerm) return;
-    const newContent = content.replaceAll(searchTerm, replaceText);
+    let newContent: string;
+    try {
+      if (useRegex) {
+        const flags = caseSensitive ? "g" : "gi";
+        newContent = content.replace(new RegExp(searchTerm, flags), replaceText);
+      } else {
+        // Escape regex special chars for literal replace
+        const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const flags = caseSensitive ? "g" : "gi";
+        newContent = content.replace(new RegExp(escaped, flags), replaceText);
+      }
+    } catch {
+      return;
+    }
     if (newContent === content) {
       setMatchCount(0);
       setMatchIndex(0);
@@ -260,7 +319,7 @@ export const FindReplace = memo(function FindReplace({
     onChange(newContent);
     setMatchCount(0);
     setMatchIndex(0);
-  }, [searchTerm, replaceText, content, onChange, textareaRef]);
+  }, [searchTerm, replaceText, content, onChange, textareaRef, useRegex, caseSensitive]);
 
   // Global Escape handler + Enter/Shift+Enter on search input
   useEffect(() => {
@@ -378,6 +437,16 @@ export const FindReplace = memo(function FindReplace({
           fontFamily: "inherit",
         }}
       />
+
+      {/* Options */}
+      <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0, fontSize: "11px" }}>
+        <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} title="Match case" bordered active={caseSensitive}>
+          Aa
+        </FindReplaceButton>
+        <FindReplaceButton onClick={() => setUseRegex((v) => !v)} title="Use regex" bordered active={useRegex}>
+          .*
+        </FindReplaceButton>
+      </div>
 
       {/* Buttons */}
       <div

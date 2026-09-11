@@ -677,3 +677,45 @@
   from { opacity: 0; transform: translateX(8px); }
   to { opacity: 1; transform: translateX(0); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Status Bar
+   ═══════════════════════════════════════════════════════════════════ */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 12px;
+  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.04));
+  font-size: 11px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.35));
+  gap: 16px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.status-bar .sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border, rgba(255, 255, 255, 0.06));
+}
+
+.status-bar .spacer {
+  flex: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Read mode (preview-only): centered narrow column
+   ═══════════════════════════════════════════════════════════════════ */
+
+.view-preview .md-viewer {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.view-preview .preview-pane {
+  display: flex;
+  justify-content: center;
+}

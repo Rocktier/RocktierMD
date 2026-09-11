@@ -6,6 +6,7 @@ import { Editor } from "./components/Editor";
 import { Preview } from "./components/Preview";
 import { Sidebar } from "./components/Sidebar";
 import { FindReplace } from "./components/FindReplace";
+import { StatusBar } from "./components/StatusBar";
 import { useTheme, toggleTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -16,7 +17,7 @@ import {
 import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
-import { t } from "./i18n";
+import { t, useUiLang } from "./i18n";
 
 const LAST_PATH_KEY = "rocktier-md-last-path";
 
@@ -49,6 +50,9 @@ function resolvePath(base: string, rel: string): string {
 
 export default function App() {
   useTheme();
+  // 订阅语言变化：App 内的 t()（toast、frontmatter 面板、确认弹窗）
+  // 在切换语言后立即重渲染，避免半新半旧（复审 F9）。
+  useUiLang();
 
   const [doc, setDoc] = useState<MarkdownDocument>({
     path: null,
@@ -61,10 +65,17 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [frontmatterOpen, setFrontmatterOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [cursorLine, setCursorLine] = useState(1);
+  const [cursorCol, setCursorCol] = useState(1);
+  const [gitBranch, setGitBranch] = useState("");
   const toastRef = useRef(0);
+  const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const docRef = useRef(doc);
+  const lastSavedContentRef = useRef(doc.content);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const externalCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { onEditorScroll, onPreviewScroll } = useScrollSync(editorRef, previewRef);
 
   useEffect(() => {
@@ -106,6 +117,9 @@ export default function App() {
     let unlisten: (() => void) | undefined;
     (async () => {
       const fn = await getCurrentWindow().listen<null>("app-close-requested", async () => {
+        // 立即向 Rust 报告"事件循环存活"，阻止 10s 看门狗强杀（复审 F5）。
+        // 用户可能正停在确认弹窗上，不能被看门狗误伤。
+        invoke("close_ack").catch(() => {});
         if (!(await confirmDiscard())) return;
         try {
           await invoke("force_close");
@@ -128,24 +142,69 @@ export default function App() {
     };
   }, [confirmDiscard]);
 
-  // Restore last-opened document on launch (zero-click resume)
+  const rememberPath = useCallback((path: string | null) => {
+    try {
+      if (path) localStorage.setItem(LAST_PATH_KEY, path);
+      else localStorage.removeItem(LAST_PATH_KEY);
+    } catch {
+      // storage full or unavailable — non-fatal
+    }
+  }, []);
+
+  // Restore last-opened document on launch (zero-click resume), then scan
+  // the recovery dir for unsaved drafts (复审 F8：恢复文件之前只写不读)。
   useEffect(() => {
-    if (!("__TAURI_INTERNALS__" in window)) return;
+    if (!isTauri) return;
     let cancelled = false;
-    const raw = localStorage.getItem(LAST_PATH_KEY);
-    if (!raw) return;
     (async () => {
+      // 1) 先恢复上次打开的文档（磁盘内容）
+      let restored: MarkdownDocument | null = null;
+      const raw = localStorage.getItem(LAST_PATH_KEY);
+      if (raw) {
+        try {
+          if (await exists(raw)) {
+            const text = await readTextFile(raw);
+            if (!cancelled) restored = { path: raw, content: text, modified: false };
+          }
+        } catch {
+          // file moved or unreadable — ignore, start fresh
+        }
+      }
+
+      // 2) 再扫描恢复草稿：优先匹配当前文档，否则取最近一份
       try {
-        if (!(await exists(raw))) return;
-        const text = await readTextFile(raw);
-        if (cancelled) return;
-        setDoc({ path: raw, content: text, modified: false });
+        const entries = await invoke<
+          Array<{ path: string; content: string; modified_ms: number }>
+        >("list_recovery");
+        const draft = entries.find((e) => e.path === restored?.path) ?? entries[0];
+        if (draft && !cancelled) {
+          if (restored?.path === draft.path && restored.content === draft.content) {
+            // 草稿与磁盘内容一致（上次正常保存过），直接清掉
+            await invoke("clear_recovery", { path: draft.path }).catch(() => {});
+          } else if (await confirmDialog(t("confirm.recover"))) {
+            if (!cancelled) {
+              restored = { path: draft.path, content: draft.content, modified: true };
+            }
+          } else if (restored?.path === draft.path) {
+            // 用户拒绝恢复当前文档的草稿 → 清掉，下次不再打扰
+            await invoke("clear_recovery", { path: draft.path }).catch(() => {});
+          }
+          // 拒绝的其它文档草稿保留在磁盘：里面可能是用户唯一的未保存内容，
+          // 宁可下次启动再问一次，也不替用户做删稿的决定。
+        }
       } catch {
-        // file moved or unreadable — ignore, start fresh
+        // recovery scan is best-effort
+      }
+
+      if (!cancelled && restored) {
+        setDoc(restored);
+        if (restored.path) rememberPath(restored.path);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [rememberPath]);
 
   // Toggle task checkbox: use 1-based source line number to avoid index drift.
   const toggleTask = useCallback((lineNumber: number, checked: boolean) => {
@@ -155,7 +214,9 @@ export default function App() {
     setDoc((d) => {
       const lines = d.content.split("\n");
       const i = lineNumber - 1;
-      if (i >= 0 && i < lines.length && /^\s*[-*+]\s+\[[ xX]\]/.test(lines[i])) {
+      // 与 markdown.ts getTaskLines 同源：接受引用块前缀（> - [ ] 待办），
+      // 否则引用块内渲染出的 checkbox 点击无效（复审 F4）。
+      if (i >= 0 && i < lines.length && /^\s*(>\s*)*[-*+]\s+\[[ xX]\]/.test(lines[i])) {
         const next = lines[i].replace(/(\[)[ xX](\])/, `$1${checked ? "x" : " "}$2`);
         if (next === lines[i]) return d;
         lines[i] = next;
@@ -176,15 +237,6 @@ export default function App() {
     }
   }, []);
 
-  const rememberPath = useCallback((path: string | null) => {
-    try {
-      if (path) localStorage.setItem(LAST_PATH_KEY, path);
-      else localStorage.removeItem(LAST_PATH_KEY);
-    } catch {
-      // storage full or unavailable — non-fatal
-    }
-  }, []);
-
   const doOpen = useCallback(async () => {
     if (!(await confirmDiscard())) return;
     const r = await openFile();
@@ -201,10 +253,14 @@ export default function App() {
       if (!path) {
         const p = await saveFileAs(content);
         if (!p) return;
+        // 与主分支保持一致：另存成功同样是"已真正保存到磁盘"，
+        // 同步基线，缩小外部变更检测的空窗（复审 F11）。
+        lastSavedContentRef.current = content;
         setDoc((d) => ({ ...d, path: p, modified: false }));
         rememberPath(p);
       } else {
         await saveFile(path, content);
+        lastSavedContentRef.current = content;
         setDoc((d) => ({ ...d, modified: false }));
       }
       showToast(t("toast.saved"));
@@ -245,9 +301,15 @@ export default function App() {
       return;
     }
     setView("preview");
-    window.addEventListener("afterprint", () => setView("editor"), { once: true });
-    // Give React a frame to mount the preview before the print snapshot
-    window.setTimeout(() => window.print(), 120);
+    // 双保险：afterprint 正常触发时立即恢复；若用户取消打印（部分平台
+    // 不派发 afterprint，如部分 macOS WKWebView），则 60s 后兜底恢复，
+    // 避免视图永远卡在 preview（复审 F7）。
+    const restore = () => setView("editor");
+    window.addEventListener("afterprint", restore, { once: true });
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(restore, 60_000);
+    }, 120);
   }, [view]);
 
   const shortcuts = useMemo(
@@ -338,6 +400,114 @@ export default function App() {
     };
   }, [openMarkdownPath]);
 
+  // ── Auto-save: debounced write to recovery file every 5s of inactivity ──
+  const autoSave = useCallback(async (path: string | null, content: string) => {
+    if (!path || !content.trim()) return;
+    if (!isTauri) return;
+    try {
+      await invoke("save_recovery", { path, content });
+      // 注意：这里绝不能更新 lastSavedContentRef —— 它表示"已真正保存到
+      // 目标文件"的基线，供 checkExternalChange 对比磁盘。恢复文件写入
+      // 与保存是两个概念，污染基线会导致磁盘旧内容被误判为"外部修改"，
+      // 用户确认重载后未保存内容直接丢失（见复审 F1）。
+    } catch {
+      // recovery write is best-effort — silent failure
+    }
+  }, []);
+
+  // Kick off auto-save after 5s of inactivity
+  useEffect(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    if (!doc.modified) return;
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSave(doc.path, doc.content);
+    }, 5000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [doc.content, doc.path, doc.modified, autoSave]);
+
+  // ── External change detection: poll file every 3s ──
+  // In-flight guard: the async body can block on a native confirm dialog;
+  // without the guard, overlapping ticks would stack dialogs (复审 F2).
+  const checkExternalChange = useCallback(async () => {
+    if (checkingRef.current) return;
+    const { path } = docRef.current;
+    if (!path || !isTauri) return;
+    checkingRef.current = true;
+    try {
+      if (!(await exists(path))) return;
+      const diskContent = await readTextFile(path);
+      if (diskContent === lastSavedContentRef.current) return;
+      if (diskContent === docRef.current.content) {
+        lastSavedContentRef.current = diskContent;
+        return;
+      }
+      // File changed on disk and differs from current doc
+      const choice = await confirmDialog(t("confirm.externalChange"));
+      if (choice) {
+        setDoc({ path, content: diskContent, modified: false });
+        lastSavedContentRef.current = diskContent;
+        showToast(t("toast.reloaded"));
+      } else {
+        lastSavedContentRef.current = diskContent; // user dismissed — don't ask again
+      }
+    } catch {
+      // file unreadable — ignore
+    } finally {
+      checkingRef.current = false;
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    externalCheckRef.current = setInterval(checkExternalChange, 3000);
+    return () => {
+      if (externalCheckRef.current) clearInterval(externalCheckRef.current);
+    };
+  }, [checkExternalChange]);
+
+  // ── Detect git branch（复审 F15：按 dir 缓存，避免每次切文档 spawn 进程）──
+  const gitBranchCacheRef = useRef(new Map<string, string | null>());
+  useEffect(() => {
+    if (!isTauri || !doc.path) {
+      setGitBranch("");
+      return;
+    }
+    let cancelled = false;
+    const currentPath = doc.path;
+    (async () => {
+      const dir = currentPath.replace(/[^/]+$/, "");
+      const cache = gitBranchCacheRef.current;
+      if (cache.has(dir)) {
+        setGitBranch(cache.get(dir) || "");
+        return;
+      }
+      try {
+        const branch = await invoke<string | null>("git_branch", { dir });
+        cache.set(dir, branch);
+        if (!cancelled) setGitBranch(branch || "");
+      } catch {
+        cache.set(dir, null);
+        if (!cancelled) setGitBranch("");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [doc.path]);
+
+  // ── Track cursor line/column ──
+  const onCursorMove = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const pos = el.selectionStart;
+    const textBefore = el.value.substring(0, pos);
+    const lines = textBefore.split("\n");
+    setCursorLine(lines.length);
+    setCursorCol(lines[lines.length - 1].length + 1);
+  }, []);
+
   // Click a cross-document link in the preview. Relative paths resolve
   // against the current document's directory.
   const onOpenDocument = useCallback((filePath: string) => {
@@ -366,8 +536,21 @@ export default function App() {
     })();
   }, [confirmDiscard, rememberPath, showToast]);
 
+  // Inject frontmatter title into document title (for PDF export / window title)
+  useEffect(() => {
+    if (frontmatterData?.title) {
+      document.title = `${frontmatterData.title} — Rocktier Markdown`;
+    } else if (doc.path) {
+      document.title = `${baseName(doc.path)} — Rocktier Markdown`;
+    } else {
+      document.title = "Rocktier Markdown";
+    }
+  }, [frontmatterData, doc.path]);
+
+  const viewClass = view === "preview" ? "view-preview" : "";
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${viewClass}`}>
       <Toolbar
         viewMode={view}
         onToggleView={cycleView}
@@ -419,6 +602,7 @@ export default function App() {
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
               onImagePaste={() => showToast(t("toast.imageInserted"))}
+              onCursorMove={onCursorMove}
             />
           )}
           {findReplaceOpen && (
@@ -441,6 +625,7 @@ export default function App() {
           )}
         </main>
       </div>
+      <StatusBar words={stats.words} line={cursorLine} column={cursorCol} gitBranch={gitBranch} />
       {frontmatterOpen && hasFrontmatter && frontmatterData && (
         <div className="frontmatter-panel" role="complementary" aria-label={t("fm.title")}>
           <div className="fm-header">

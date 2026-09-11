@@ -1,5 +1,6 @@
 import { memo, useCallback, useRef, type RefObject } from "react";
 import { t, useUiLang } from "../i18n";
+import { htmlToMarkdown } from "../services/htmlToMarkdown";
 
 interface Props {
   content: string;
@@ -7,11 +8,12 @@ interface Props {
   textareaRef?: RefObject<HTMLTextAreaElement>;
   onScroll?: () => void;
   onImagePaste?: () => void;
+  onCursorMove?: () => void;
 }
 
 const INDENT = "  ";
 
-export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste }: Props) {
+export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste, onCursorMove }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef || internalRef;
   useUiLang(); // 语言切换时重渲染
@@ -113,19 +115,24 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
           const dataUrl = reader.result as string;
           const el = ref.current;
           if (!el) return;
-          const s = el.selectionStart;
-          const end = el.selectionEnd;
-          const md = `![image](${dataUrl})`;
-          el.value = el.value.substring(0, s) + md + el.value.substring(end);
-          el.selectionStart = el.selectionEnd = s + md.length;
-          onChange(el.value);
+          // 走 splice（execCommand insertText）而非直接赋值 value，
+          // 保住原生 undo 栈——⌘Z 可撤销粘贴（复审 F6）。
+          splice(el, el.selectionStart, el.selectionEnd, `![image](${dataUrl})`);
           onImagePaste?.();
         };
         reader.readAsDataURL(blob);
         return;
       }
     }
-  }, [onChange, onImagePaste]);
+    // Rich text (HTML) → Markdown
+    const html = e.clipboardData?.getData("text/html");
+    if (html) {
+      e.preventDefault();
+      const el = ref.current;
+      if (!el) return;
+      splice(el, el.selectionStart, el.selectionEnd, htmlToMarkdown(html));
+    }
+  }, [splice, onImagePaste]);
 
   return (
     <div className="editor-pane">
@@ -138,6 +145,8 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
           onKeyDown={onKey}
           onPaste={onPaste}
           onScroll={onScroll}
+          onKeyUp={onCursorMove}
+          onClick={onCursorMove}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"

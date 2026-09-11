@@ -45,7 +45,10 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
           actions.onFindReplace();
           break;
         case "p":
-          if (e.shiftKey) { e.preventDefault(); actions.onExportPdf(); }
+          // 复审 F12：无 shift 的 ⌘P 一并拦截，防止浏览器 dev 模式弹系统
+          // 打印、与 ⌘⇧P 导出语义混淆。
+          e.preventDefault();
+          if (e.shiftKey) actions.onExportPdf();
           break;
       }
     };

@@ -69,7 +69,11 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
       const bound = root.querySelectorAll<HTMLInputElement>("input[data-rocktier-task]");
       const idx = Array.prototype.indexOf.call(bound, cb);
       if (idx === -1) return;
-      const line = taskLines && taskLines[idx] ? taskLines[idx] : idx + 1;
+      // 复审 F10：源文档里的原始 HTML checkbox 会挤占序号，导致
+      // taskLines[idx] 与实际行错位。匹配不到行号时直接忽略，
+      // 绝不猜行号误改别处。
+      const line = taskLines?.[idx];
+      if (!line) return;
       onToggleTask(line, cb.checked);
     };
 
