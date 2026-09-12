@@ -4,6 +4,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use serde::Serialize;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, WindowEvent};
 
 /// 前端完成初始化（关窗确认监听器已注册）后置位。
@@ -64,6 +65,14 @@ fn initial_file(state: tauri::State<InitialFile>) -> Option<String> {
 #[tauri::command]
 fn force_close(window: tauri::Window) {
     let _ = window.destroy();
+}
+
+/// 弹出系统打印面板（用户可选"存储为 PDF"完成导出）。
+/// 根因修复：WKWebView 对 JS 的 window.print() 是静默 no-op，
+/// 必须从原生侧调用 wry 的 printOperationWithPrintInfo。
+#[tauri::command]
+fn print_doc(webview: tauri::WebviewWindow) -> Result<(), String> {
+    webview.print().map_err(|e| e.to_string())
 }
 
 /// 前端在注册完 app-close-requested 监听后调用，启用"拦截关窗"流程。
@@ -192,6 +201,136 @@ fn clear_recovery(app: tauri::AppHandle, path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 构建原生应用菜单（对齐 macOS 优秀编辑器的惯例：文件/编辑/显示/窗口）。
+/// 由前端在挂载后按当前 UI 语言调用，语言切换时可重建。
+/// 自定义项的点击经 on_menu_event 转成 "menu-action" 事件发给前端；
+/// 预定义项（撤销/拷贝/粘贴/最小化等）由系统自动本地化并自带快捷键。
+fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
+    let zh = lang.starts_with("zh");
+    let l = |zhv: &'static str, en: &'static str| if zh { zhv } else { en };
+
+    let new_i = MenuItem::with_id(app, "new", l("新建", "New"), true, Some("CmdOrCtrl+N"))?;
+    let open_i = MenuItem::with_id(app, "open", l("打开…", "Open…"), true, Some("CmdOrCtrl+O"))?;
+    let save_i = MenuItem::with_id(app, "save", l("保存", "Save"), true, Some("CmdOrCtrl+S"))?;
+    let save_as_i = MenuItem::with_id(
+        app,
+        "save-as",
+        l("另存为…", "Save As…"),
+        true,
+        Some("CmdOrCtrl+Shift+S"),
+    )?;
+    let export_i = MenuItem::with_id(
+        app,
+        "export-pdf",
+        l("导出 PDF…", "Export PDF…"),
+        true,
+        Some("CmdOrCtrl+Shift+P"),
+    )?;
+
+    let app_menu = Submenu::with_items(
+        app,
+        "Rocktier Markdown",
+        true,
+        &[
+            &PredefinedMenuItem::about(
+                app,
+                Some(l("关于 Rocktier Markdown", "About Rocktier Markdown")),
+                None,
+            )?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+
+    let file_menu = Submenu::with_items(
+        app,
+        l("文件", "File"),
+        true,
+        &[
+            &new_i,
+            &open_i,
+            &PredefinedMenuItem::separator(app)?,
+            &save_i,
+            &save_as_i,
+            &PredefinedMenuItem::separator(app)?,
+            &export_i,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+
+    let edit_menu = Submenu::with_items(
+        app,
+        l("编辑", "Edit"),
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    let sidebar_i = MenuItem::with_id(
+        app,
+        "toggle-sidebar",
+        l("切换侧栏", "Toggle Sidebar"),
+        true,
+        Some("CmdOrCtrl+\\"),
+    )?;
+    let theme_i = MenuItem::with_id(app, "toggle-theme", l("切换日夜模式", "Toggle Theme"), true, None::<&str>)?;
+    let find_i = MenuItem::with_id(app, "find", l("查找替换", "Find & Replace"), true, Some("CmdOrCtrl+F"))?;
+    let view_menu = Submenu::with_items(
+        app,
+        l("显示", "View"),
+        true,
+        &[&sidebar_i, &theme_i, &find_i],
+    )?;
+
+    let window_menu = Submenu::with_items(
+        app,
+        l("窗口", "Window"),
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::fullscreen(app, None)?,
+        ],
+    )?;
+
+    let menu = Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])?;
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+/// 前端挂载后（以及语言切换时）调用，按 UI 语言（"zh" / "en"）构建菜单。
+#[tauri::command]
+fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
+    build_app_menu(&app, &lang).map_err(|e| e.to_string())
+}
+
+/// 把粘贴的图片写到文档同目录 assets/ 下（前端传 base64）。
+/// 相比把几 MB 的 data URL 内联进 .md：文件可移植、体积小一个数量级，
+/// 且避免之后每次按键都要让解析管线完整处理那段 base64（本轮 U2）。
+#[tauri::command]
+#[cfg(desktop)]
+fn save_paste_image(path: String, data: String) -> Result<(), String> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| e.to_string())?;
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -209,14 +348,21 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             force_close,
+            print_doc,
             mark_ready,
             close_ack,
             git_branch,
             save_recovery,
             list_recovery,
             clear_recovery,
-            initial_file
+            initial_file,
+            save_paste_image,
+            build_menu
         ])
+        .on_menu_event(|app, event| {
+            // 菜单项 → 前端：复用现有的动作处理链（未保存守卫、toast 等都在前端）
+            let _ = app.emit("menu-action", event.id().0.as_str());
+        })
         .on_window_event(|window, event| {
             // Hand the close decision to the frontend, which checks for
             // unsaved changes before destroying the window.

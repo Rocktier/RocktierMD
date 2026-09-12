@@ -53,7 +53,7 @@ export const Toolbar = memo(function Toolbar({
           <span className="brand-dot" />
           <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
         </div>
-        <div className={`doc-pill ${modified ? "modified" : ""}`}>
+        <div className={`doc-pill ${modified ? "modified" : ""}`} title={modified ? t("toolbar.unsaved") : undefined}>
           {modified && <span className="dot" />}
           <span className="name">{displayName}</span>
         </div>
@@ -65,7 +65,7 @@ export const Toolbar = memo(function Toolbar({
             className={`tbar-btn ${viewMode === "editor" ? "active" : ""}`}
             disabled={viewMode === "editor"}
             onClick={onToggleView}
-            title="Editor"
+            title={t("toolbar.editorOnly")}
             aria-label={t("toolbar.editorOnly")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
@@ -79,7 +79,7 @@ export const Toolbar = memo(function Toolbar({
             className={`tbar-btn ${viewMode === "split" ? "active" : ""}`}
             disabled={viewMode === "split"}
             onClick={onToggleView}
-            title="Split"
+            title={t("toolbar.split")}
             aria-label={t("toolbar.split")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
@@ -91,7 +91,7 @@ export const Toolbar = memo(function Toolbar({
             className={`tbar-btn ${viewMode === "preview" ? "active" : ""}`}
             disabled={viewMode === "preview"}
             onClick={onToggleView}
-            title="Preview"
+            title={t("toolbar.previewOnly")}
             aria-label={t("toolbar.previewOnly")}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
@@ -104,11 +104,12 @@ export const Toolbar = memo(function Toolbar({
       </div>
 
       <div className="toolbar-actions">
-        <button className="tbar-btn stat" title={t("toolbar.statTitle", { n: words })} aria-label={t("toolbar.statAria", { n: words, m: minutes })}>
+        {/* 非交互展示位：用 div 而非 button，避免"看着能点、点了没反应"（本轮 B4） */}
+        <div className="tbar-btn stat" role="status" title={t("toolbar.statAria", { n: words, m: minutes })}>
           <span className="stat-num">{words >= 1000 ? `${(words / 1000).toFixed(1)}k` : words}</span>
           <span className="stat-sep">/</span>
           <span className="stat-min">{minutes}m</span>
-        </button>
+        </div>
         <button className="tbar-btn" onClick={onNew} title={t("toolbar.new")} aria-label={t("toolbar.new")}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
             <line x1="7.5" y1="2" x2="7.5" y2="13" />
@@ -158,7 +159,7 @@ export const Toolbar = memo(function Toolbar({
           <button
             className={`tbar-btn ${frontmatterOpen ? "active" : ""}`}
             onClick={onToggleInfo}
-            title="Info"
+            title={t("toolbar.info")}
             aria-label={t("toolbar.info")}
           >
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
@@ -169,7 +170,7 @@ export const Toolbar = memo(function Toolbar({
           </button>
         )}
         <button className="tbar-btn theme-btn" onClick={onToggleTheme} title={t("toolbar.theme")} aria-label={t("toolbar.theme")}>
-          <svg className="icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
+          <svg className="icon-sun" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
             <circle cx="7" cy="7" r="3" />
             <line x1="7" y1="1" x2="7" y2="2.5" strokeLinecap="round" />
             <line x1="7" y1="11.5" x2="7" y2="13" strokeLinecap="round" />
@@ -180,7 +181,7 @@ export const Toolbar = memo(function Toolbar({
             <line x1="2.8" y1="11.2" x2="3.9" y2="10.1" strokeLinecap="round" />
             <line x1="10.1" y1="3.9" x2="11.2" y2="2.8" strokeLinecap="round" />
           </svg>
-          <svg className="icon-moon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
+          <svg className="icon-moon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
             <path d="M11 8.5A5 5 0 0 1 5.5 3a4.98 4.98 0 0 1 5.5 5.5z" />
             <path d="M7 1a6 6 0 0 0 6 6c0 3.31-2.69 6-6 6S1 10.31 1 7a6 6 0 0 2.5-4.87" />
           </svg>

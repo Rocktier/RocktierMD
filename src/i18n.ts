@@ -9,6 +9,7 @@ const STORE_KEY = "rocktier-md-lang";
 const STRINGS = {
   zh: {
     "sidebar.files": "文件",
+    "sidebar.recent": "最近打开",
     "sidebar.close": "关闭",
     "sidebar.actions": "操作",
     "sidebar.openFile": "打开文件",
@@ -38,6 +39,7 @@ const STRINGS = {
     "toolbar.exportPdf": "导出 PDF (⌘⇧P)",
     "toolbar.info": "文档信息",
     "toolbar.theme": "切换日夜模式",
+    "toolbar.unsaved": "有未保存的更改",
     "find.find": "查找",
     "find.replace": "替换",
     "find.replaceAll": "全部替换",
@@ -72,6 +74,7 @@ const STRINGS = {
   },
   en: {
     "sidebar.files": "Files",
+    "sidebar.recent": "Recent",
     "sidebar.close": "Close",
     "sidebar.actions": "Actions",
     "sidebar.openFile": "Open File",
@@ -101,6 +104,7 @@ const STRINGS = {
     "toolbar.exportPdf": "Export PDF (⌘⇧P)",
     "toolbar.info": "Document info",
     "toolbar.theme": "Toggle theme",
+    "toolbar.unsaved": "Unsaved changes",
     "find.find": "Find",
     "find.replace": "Replace",
     "find.replaceAll": "All",

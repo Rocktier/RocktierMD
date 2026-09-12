@@ -8,9 +8,11 @@ interface Props {
   onClose: () => void;
   headings: Heading[];
   onJumpTo: (line: number) => void;
+  recent?: string[];
+  onOpenRecent?: (path: string) => void;
 }
 
-export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, onJumpTo }: Props) {
+export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, onJumpTo, recent = [], onOpenRecent }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [filter, setFilter] = useState("");
   useUiLang(); // 语言切换时重渲染
@@ -45,6 +47,27 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
             </button>
           </div>
 
+          {recent.length > 0 && (
+            <div className="sidebar-section">
+              <h3>{t("sidebar.recent")}</h3>
+              {recent.map((p) => (
+                <button
+                  key={p}
+                  className="sidebar-item"
+                  onClick={() => onOpenRecent?.(p)}
+                  title={p}
+                >
+                  <span className="icon">
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                      <path d="M2 3h3l1.4 1.3H10a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+                    </svg>
+                  </span>
+                  {p.split(/[/\\]/).pop()}
+                </button>
+              ))}
+            </div>
+          )}
+
           {headings.length > 0 && (
             <div className="sidebar-section">
               <div className="sidebar-head">
@@ -63,6 +86,7 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
                     type="text"
                     className="toc-filter"
                     placeholder={t("sidebar.filterHeadings")}
+                    aria-label={t("sidebar.filterHeadings")}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                   />

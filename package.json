@@ -10,10 +10,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build && rm -rf \"$HOME/Downloads/Rocktier Markdown.app\" && cp -R src-tauri/target/release/bundle/macos/*.app \"$HOME/Downloads/\" && cp -f src-tauri/target/release/bundle/dmg/*.dmg \"$HOME/Downloads/\""
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
     "dompurify": "^3.4.15",

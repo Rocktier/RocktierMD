@@ -8,12 +8,13 @@ interface Props {
   textareaRef?: RefObject<HTMLTextAreaElement>;
   onScroll?: () => void;
   onImagePaste?: () => void;
+  saveImagePaste?: (dataUrl: string) => Promise<string | null>;
   onCursorMove?: () => void;
 }
 
 const INDENT = "  ";
 
-export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste, onCursorMove }: Props) {
+export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste, saveImagePaste, onCursorMove }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef || internalRef;
   useUiLang(); // 语言切换时重渲染
@@ -111,13 +112,21 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
         const blob = item.getAsFile();
         if (!blob) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
           const dataUrl = reader.result as string;
           const el = ref.current;
           if (!el) return;
+          // 优先落盘到文档同目录 assets/ 并插入相对路径（本轮 U2）——
+          // 几 MB 的 base64 进文档后每次按键都要被完整解析；落盘失败或
+          // 文档未保存时退回 base64 内联。
+          let markdown = `![image](${dataUrl})`;
+          if (saveImagePaste) {
+            const saved = await saveImagePaste(dataUrl);
+            if (saved) markdown = `![image](${saved})`;
+          }
           // 走 splice（execCommand insertText）而非直接赋值 value，
           // 保住原生 undo 栈——⌘Z 可撤销粘贴（复审 F6）。
-          splice(el, el.selectionStart, el.selectionEnd, `![image](${dataUrl})`);
+          splice(el, el.selectionStart, el.selectionEnd, markdown);
           onImagePaste?.();
         };
         reader.readAsDataURL(blob);
@@ -132,7 +141,7 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
       if (!el) return;
       splice(el, el.selectionStart, el.selectionEnd, htmlToMarkdown(html));
     }
-  }, [splice, onImagePaste]);
+  }, [splice, onImagePaste, saveImagePaste]);
 
   return (
     <div className="editor-pane">

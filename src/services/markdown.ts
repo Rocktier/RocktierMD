@@ -245,6 +245,9 @@ export interface Heading {
 
 export function extractHeadings(src: string): Heading[] {
   const headings: Heading[] = [];
+  // 与 Preview.applyHeadingIds 同规则去重：重复标题 → id、id-1、id-2。
+  // 不去重的话 TOC 点击 getElementById 永远命中第一个重复标题（本轮 B2）。
+  const used = new Map<string, number>();
   let inCodeBlock = false;
   src.split("\n").forEach((line, idx) => {
     // Skip headings inside fenced code blocks
@@ -255,10 +258,14 @@ export function extractHeadings(src: string): Heading[] {
     if (inCodeBlock) return;
     const m = line.match(/^(#{1,6})\s+(.+)$/);
     if (m) {
+      let id = slugify(stripInlineMarkers(m[2]));
+      const n = used.get(id) ?? 0;
+      used.set(id, n + 1);
+      if (n > 0) id = `${id}-${n}`;
       headings.push({
         level: m[1].length,
         text: m[2].replace(/\s+#+$/, "").trim(),
-        id: slugify(stripInlineMarkers(m[2])),
+        id,
         line: idx + 1,
       });
     }

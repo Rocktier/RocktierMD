@@ -20,6 +20,8 @@ import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/
 import { t, useUiLang } from "./i18n";
 
 const LAST_PATH_KEY = "rocktier-md-last-path";
+const RECENT_KEY = "rocktier-md-recent";
+const RECENT_MAX = 5;
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -52,7 +54,7 @@ export default function App() {
   useTheme();
   // 订阅语言变化：App 内的 t()（toast、frontmatter 面板、确认弹窗）
   // 在切换语言后立即重渲染，避免半新半旧（复审 F9）。
-  useUiLang();
+  const lang = useUiLang();
 
   const [doc, setDoc] = useState<MarkdownDocument>({
     path: null,
@@ -68,6 +70,7 @@ export default function App() {
   const [cursorLine, setCursorLine] = useState(1);
   const [cursorCol, setCursorCol] = useState(1);
   const [gitBranch, setGitBranch] = useState("");
+  const [recent, setRecent] = useState<string[]>([]);
   const toastRef = useRef(0);
   const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -144,10 +147,27 @@ export default function App() {
 
   const rememberPath = useCallback((path: string | null) => {
     try {
-      if (path) localStorage.setItem(LAST_PATH_KEY, path);
-      else localStorage.removeItem(LAST_PATH_KEY);
+      if (path) {
+        localStorage.setItem(LAST_PATH_KEY, path);
+        // 最近打开列表（本轮 U1）：去重、最新在前、封顶 5 条
+        const list: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+        const next = [path, ...list.filter((p) => p !== path)].slice(0, RECENT_MAX);
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+        setRecent(next);
+      } else {
+        localStorage.removeItem(LAST_PATH_KEY);
+      }
     } catch {
       // storage full or unavailable — non-fatal
+    }
+  }, []);
+
+  // Load recent list on mount
+  useEffect(() => {
+    try {
+      setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"));
+    } catch {
+      // corrupted entry — start empty
     }
   }, []);
 
@@ -302,28 +322,63 @@ export default function App() {
     showToast(t("toast.newDoc"));
   }, [confirmDiscard, showToast]);
 
+  // 原生菜单跟随 UI 语言重建（macOS 顶栏的 文件/编辑/显示/窗口，本轮问题 2）
+  useEffect(() => {
+    if (!isTauri) return;
+    invoke("build_menu", { lang }).catch(() => {});
+  }, [lang]);
+
   const cycleView = useCallback(() => {
     setView((v) => (v === "split" ? "editor" : v === "editor" ? "preview" : "split"));
   }, []);
 
   // PDF export prints the preview pane. If the preview is hidden, mount it
   // first and restore the previous view when printing finishes.
-  const doExportPdf = useCallback(() => {
-    if (view !== "editor") {
-      window.print();
-      return;
+  // 注意：必须走 Tauri 的 print()（IPC → wry 的 printOperationWithPrintInfo，
+  // 弹系统打印面板，可选"存储为 PDF"）。WKWebView 对 JS 的 window.print()
+  // 是静默 no-op，这就是此前按钮毫无反应的原因。
+  // 原生打印面板是模态的：await 返回即对话框已关闭，直接恢复视图，
+  // 不再需要 afterprint / 兜底定时器（复审 F7 的两件套一并作废）。
+  const doExportPdf = useCallback(async () => {
+    const wasEditor = view === "editor";
+    if (wasEditor) setView("preview");
+    // 等一帧让预览挂载完成，再交给系统打印
+    await new Promise((r) => setTimeout(r, 150));
+    try {
+      await invoke("print_doc");
+    } catch {
+      // printing unavailable — stay on current view
     }
-    setView("preview");
-    // 双保险：afterprint 正常触发时立即恢复；若用户取消打印（部分平台
-    // 不派发 afterprint，如部分 macOS WKWebView），则 60s 后兜底恢复，
-    // 避免视图永远卡在 preview（复审 F7）。
-    const restore = () => setView("editor");
-    window.addEventListener("afterprint", restore, { once: true });
-    window.setTimeout(() => {
-      window.print();
-      window.setTimeout(restore, 60_000);
-    }, 120);
+    if (wasEditor) setView("editor");
   }, [view]);
+
+  // 菜单事件 → 现有动作链（未保存守卫 / toast 都在前端，这里只做转发）
+  useEffect(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .listen<string>("menu-action", (e) => {
+        switch (e.payload) {
+          case "new": doNew(); break;
+          case "open": doOpen(); break;
+          case "save": doSave(); break;
+          case "save-as": doSaveAs(); break;
+          case "find": setFindReplaceOpen((v) => !v); break;
+          case "export-pdf": doExportPdf(); break;
+          case "toggle-sidebar": setSidebar((v) => !v); break;
+          case "toggle-theme": toggleTheme(); break;
+        }
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf]);
 
   const shortcuts = useMemo(
     () => ({
@@ -544,6 +599,25 @@ export default function App() {
     setCursorCol(lines[lines.length - 1].length + 1);
   }, []);
 
+  // 粘贴图片落盘到文档同目录 assets/，插入相对路径（本轮 U2）。
+  // 几 MB 的 base64 一旦进文档，之后每次按键都要被完整解析一遍；落盘后
+  // 文档只留一行路径。未保存的文档（无落盘位置）退回 base64。
+  const saveImagePaste = useCallback(async (dataUrl: string): Promise<string | null> => {
+    const path = docRef.current.path;
+    if (!path || !isTauri) return null;
+    const m = /^data:image\/([a-zA-Z+]+);base64,(.+)$/.exec(dataUrl);
+    if (!m) return null;
+    const dir = path.replace(/[^/\\]+$/, "");
+    const ext = m[1] === "jpeg" ? "jpg" : m[1];
+    const name = `paste-${Date.now()}.${ext}`;
+    try {
+      await invoke("save_paste_image", { path: `${dir}assets/${name}`, data: m[2] });
+      return `assets/${name}`;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Click a cross-document link in the preview. Relative paths resolve
   // against the current document's directory.
   const onOpenDocument = useCallback((filePath: string) => {
@@ -583,6 +657,19 @@ export default function App() {
     }
   }, [frontmatterData, doc.path]);
 
+  // frontmatter 面板支持 Esc 关闭（本轮 U6），与 FindReplace 行为一致
+  useEffect(() => {
+    if (!frontmatterOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setFrontmatterOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [frontmatterOpen]);
+
   const viewClass = view === "preview" ? "view-preview" : "";
 
   return (
@@ -615,6 +702,11 @@ export default function App() {
           onOpen={doOpen}
           onClose={() => setSidebar(false)}
           headings={headings}
+          recent={recent}
+          onOpenRecent={(p) => {
+            openMarkdownPath(p);
+            setSidebar(false);
+          }}
           onJumpTo={(line) => {
             const el = editorRef.current;
             if (!el) return;
@@ -638,6 +730,7 @@ export default function App() {
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
               onImagePaste={() => showToast(t("toast.imageInserted"))}
+              saveImagePaste={saveImagePaste}
               onCursorMove={onCursorMove}
             />
           )}
@@ -666,7 +759,12 @@ export default function App() {
         <div className="frontmatter-panel" role="complementary" aria-label={t("fm.title")}>
           <div className="fm-header">
             <span className="fm-title">{t("fm.title")}</span>
-            <button className="fm-close" onClick={() => setFrontmatterOpen(false)} aria-label={t("fm.close")}>×</button>
+            <button className="fm-close" onClick={() => setFrontmatterOpen(false)} aria-label={t("fm.close")}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+                <line x1="2" y1="2" x2="10" y2="10" />
+                <line x1="10" y1="2" x2="2" y2="10" />
+              </svg>
+            </button>
           </div>
           <dl className="fm-body">
             {frontmatterData.title && <><dt>{t("fm.titleLabel")}</dt><dd>{frontmatterData.title}</dd></>}
@@ -675,7 +773,7 @@ export default function App() {
           </dl>
         </div>
       )}
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
