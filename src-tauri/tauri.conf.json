@@ -18,11 +18,26 @@
     "resources": [],
     "fileAssociations": [
       {
-        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext"],
+        "ext": [
+          "md",
+          "markdown",
+          "mdown",
+          "mkd",
+          "mkdn",
+          "mdwn",
+          "mdtxt",
+          "mdtext"
+        ],
         "name": "Rocktier Markdown Document",
         "description": "Markdown Document",
         "role": "Editor",
-        "mimeType": "text/markdown"
+        "mimeType": "text/markdown",
+        "exportedType": {
+          "identifier": "net.daringfireball.markdown",
+          "conformsTo": [
+            "public.text"
+          ]
+        }
       }
     ],
     "copyright": "Copyright 2026 Rocktier",
