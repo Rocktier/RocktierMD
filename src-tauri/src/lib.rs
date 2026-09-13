@@ -4,6 +4,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use serde::Serialize;
+use tauri_plugin_opener::OpenerExt;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -304,7 +305,14 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         ],
     )?;
 
-    let menu = Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])?;
+    let site_i = MenuItem::with_id(app, "website", l("官方网站", "Website"), true, None::<&str>)?;
+    let mail_i = MenuItem::with_id(app, "feedback", l("反馈", "Feedback"), true, None::<&str>)?;
+    let help_menu = Submenu::with_items(app, l("帮助", "Help"), true, &[&site_i, &mail_i])?;
+
+    let menu = Menu::with_items(
+        app,
+        &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu],
+    )?;
     app.set_menu(menu)?;
     Ok(())
 }
@@ -313,6 +321,17 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
 #[tauri::command]
 fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     build_app_menu(&app, &lang).map_err(|e| e.to_string())
+}
+
+/// 帮助菜单里的外链（官网 / 反馈邮箱），白名单防止任意 URL。
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    const ALLOWED: [&str; 3] =
+        ["https://rocktier.com/", "https://www.rocktier.com/", "mailto:"];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+        return Err(format!("blocked url: {url}"));
+    }
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
 /// 把粘贴的图片写到文档同目录 assets/ 下（前端传 base64）。
@@ -335,6 +354,7 @@ fn save_paste_image(path: String, data: String) -> Result<(), String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             app.manage(Ready(AtomicBool::new(false)));
@@ -351,6 +371,7 @@ pub fn run() {
             print_doc,
             mark_ready,
             close_ack,
+            open_url,
             git_branch,
             save_recovery,
             list_recovery,

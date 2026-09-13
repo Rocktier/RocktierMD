@@ -368,6 +368,8 @@ export default function App() {
           case "export-pdf": doExportPdf(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": toggleTheme(); break;
+          case "website": void invoke('open_url', { url: 'https://rocktier.com/' }).catch(() => {}); break;
+          case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.studio' }).catch(() => {}); break;
         }
       })
       .then((fn) => {
