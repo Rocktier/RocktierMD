@@ -186,11 +186,10 @@ export default function App() {
         // 拉不到就当没有，继续走零点击恢复
       }
 
-      // 1) 先恢复启动文件 / 上次打开的文档（磁盘内容）
+      // 1) 只有双击 .md 文件启动时才打开对应文档；普通启动一律是新的空白页
+      //    （家族启动状态策略：启动不静默恢复上次文档，用户从侧栏"最近打开"自己点）。
       let restored: MarkdownDocument | null = null;
-      const candidates = launchedWith
-        ? [launchedWith, localStorage.getItem(LAST_PATH_KEY) || ""]
-        : [localStorage.getItem(LAST_PATH_KEY) || ""];
+      const candidates = launchedWith ? [launchedWith] : [];
       for (const raw of candidates) {
         if (!raw) continue;
         try {
