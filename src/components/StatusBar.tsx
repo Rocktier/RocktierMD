@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { t, useUiLang } from "../i18n";
+import { t, useUiLang, getUiLang, setUiLang } from "../i18n";
 
 interface Props {
   words: number;
@@ -22,6 +22,15 @@ export const StatusBar = memo(function StatusBar({ words, line, column, gitBranc
           <span>{gitBranch}</span>
         </>
       )}
+      <span className="sep" />
+      <button
+        type="button"
+        className="status-lang"
+        onClick={() => setUiLang(getUiLang() === "zh" ? "en" : "zh")}
+        title={getUiLang() === "zh" ? "Switch to English" : "切换为中文"}
+      >
+        {getUiLang() === "zh" ? "EN" : "中文"}
+      </button>
     </footer>
   );
 });

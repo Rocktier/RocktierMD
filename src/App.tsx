@@ -77,6 +77,10 @@ export default function App() {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const docRef = useRef(doc);
   const lastSavedContentRef = useRef(doc.content);
+  // 新建文档在首次保存前的恢复 key（合成路径，磁盘上不存在）
+  const UNTITLED_KEY = "__untitled__";
+  // 基线所属的文件路径：文档切换时基线必须跟着换（外部修改检测依赖它）
+  const lastPathRef = useRef<string | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const externalCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { onEditorScroll, onPreviewScroll } = useScrollSync(editorRef, previewRef);
@@ -209,21 +213,24 @@ export default function App() {
         const entries = await invoke<
           Array<{ path: string; content: string; modified_ms: number }>
         >("list_recovery");
-        const draft = entries.find((e) => e.path === restored?.path) ?? entries[0];
+        // 只恢复「当前文档」的草稿。普通启动（没打开文件）不弹恢复询问——
+        // 否则会拿 entries[0]（别的文件的草稿）来问，用户点"是"就等于把 B 的内容灌进 A。
+        const opened = restored; // 闭包内需要非空快照（let 的收窄进不了回调）
+        const draft = opened ? entries.find((e) => e.path === opened.path) : undefined;
         if (draft && !cancelled) {
-          if (restored?.path === draft.path && restored.content === draft.content) {
+          if (restored && restored.path === draft.path && restored.content === draft.content) {
             // 草稿与磁盘内容一致（上次正常保存过），直接清掉
             await invoke("clear_recovery", { path: draft.path }).catch(() => {});
           } else if (await confirmDialog(t("confirm.recover"))) {
             if (!cancelled) {
               restored = { path: draft.path, content: draft.content, modified: true };
             }
-          } else if (restored?.path === draft.path) {
-            // 用户拒绝恢复当前文档的草稿 → 清掉，下次不再打扰
+          } else {
+            // 用户拒绝恢复 → 清掉这份草稿，下次不再打扰。
+            // 这里用 draft.path（而非 restored?.path）：后者为 null 时旧代码永远清不掉，
+            // 于是同一个恢复提示每次启动都会弹一遍。
             await invoke("clear_recovery", { path: draft.path }).catch(() => {});
           }
-          // 拒绝的其它文档草稿保留在磁盘：里面可能是用户唯一的未保存内容，
-          // 宁可下次启动再问一次，也不替用户做删稿的决定。
         }
       } catch {
         // recovery scan is best-effort
@@ -495,7 +502,9 @@ export default function App() {
 
   // ── Auto-save: debounced write to recovery file every 5s of inactivity ──
   const autoSave = useCallback(async (path: string | null, content: string) => {
-    if (!path || !content.trim()) return;
+    // 新建文档还没有路径，用合成 key 兜住——崩溃恢复最该保住的就是从未落盘的文档
+    if (!content.trim()) return;
+    if (!path) path = UNTITLED_KEY;
     if (!isTauri) return;
     try {
       await invoke("save_recovery", { path, content });
@@ -531,6 +540,12 @@ export default function App() {
     try {
       if (!(await exists(path))) return;
       const diskContent = await readTextFile(path);
+      // 文档刚被切换/载入过：基线还停留在上一个文件，先以磁盘内容重建基线再比较。
+      if (lastPathRef.current !== path) {
+        lastPathRef.current = path;
+        lastSavedContentRef.current = diskContent;
+        return;
+      }
       if (diskContent === lastSavedContentRef.current) return;
       if (diskContent === docRef.current.content) {
         lastSavedContentRef.current = diskContent;
@@ -570,7 +585,7 @@ export default function App() {
     let cancelled = false;
     const currentPath = doc.path;
     (async () => {
-      const dir = currentPath.replace(/[^/]+$/, "");
+      const dir = currentPath.replace(/[^/\\]+$/, "");
       const cache = gitBranchCacheRef.current;
       if (cache.has(dir)) {
         setGitBranch(cache.get(dir) || "");

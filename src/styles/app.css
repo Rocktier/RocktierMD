@@ -702,6 +702,20 @@
   background: var(--border, rgba(255, 255, 255, 0.06));
 }
 
+/* 语言切换（status bar 右端，低调入口） */
+.status-lang {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+  opacity: .6;
+}
+.status-lang:hover { opacity: 1; }
+
 .status-bar .spacer {
   flex: 1;
 }

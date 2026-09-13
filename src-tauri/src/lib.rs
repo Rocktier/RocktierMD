@@ -150,8 +150,17 @@ fn save_recovery(app: tauri::AppHandle, path: String, content: String) -> Result
     let dir = recovery_dir(&app)?;
     let file = dir.join(recovery_file_name(&path));
     let payload = serde_json::json!({ "path": path, "content": content });
-    std::fs::write(&file, payload.to_string()).map_err(|e| e.to_string())?;
-    Ok(())
+    // 原子写：fs::write 先 truncate 再写，崩溃落在两步之间会把旧草稿和新草稿一起毁掉，
+    // 正是恢复机制要防的场景。改为写临时文件后 rename（同分区原子）。
+    let tmp = dir.join(format!("{}.tmp", recovery_file_name(&path)));
+    std::fs::write(&tmp, payload.to_string()).map_err(|e| e.to_string())?;
+    match std::fs::rename(&tmp, &file) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e.to_string())
+        }
+    }
 }
 
 /// Lists all recovery drafts, newest first. Frontend offers restore on launch.
@@ -475,10 +484,12 @@ pub fn run() {
                 }
                 // tao#1235：冷启动时该事件在 setup/托管状态存在之前直达（urls 空、
                 // try_state 为 None 都可能发生），所以先入进程级队列，setup 再搬运。
-                PENDING_DOCS
-                    .lock()
-                    .expect("PENDING_DOCS poisoned")
-                    .push(path.to_string());
+                // 热启动先排空队列：队列只在 setup 里 drain 一次，不排则每打开
+                // 一个文件就多残留一条（缓慢内存泄漏）。
+                if let Ok(mut q) = PENDING_DOCS.lock() {
+                    q.clear();
+                    q.push(path.to_string());
+                }
                 // 热启动（应用已运行）：托管状态与前端监听都在，立即送达。
                 if let Some(state) = _app_handle.try_state::<InitialFile>() {
                     if let Ok(mut slot) = state.0.lock() {

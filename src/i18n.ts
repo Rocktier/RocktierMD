@@ -71,6 +71,8 @@ const STRINGS = {
     "fm.date": "日期",
     "fm.close": "关闭",
     "editor.placeholder": "开始编写 Markdown…",
+    "find.matchCase": "区分大小写",
+    "find.useRegex": "使用正则表达式",
   },
   en: {
     "sidebar.files": "Files",
@@ -136,6 +138,8 @@ const STRINGS = {
     "fm.date": "Date",
     "fm.close": "Close",
     "editor.placeholder": "Start writing Markdown...",
+    "find.matchCase": "Match case",
+    "find.useRegex": "Use regex",
   },
 } as const;
 
@@ -149,11 +153,7 @@ function detectLang(): Lang {
   } catch {
     // storage unavailable
   }
-  const prefs = navigator.languages || [navigator.language || "en"];
-  for (const p of prefs) {
-    if (p.toLowerCase().startsWith("zh")) return "zh";
-    if (p.toLowerCase().startsWith("en")) return "en";
-  }
+  // 家族规范：未显式选择过语言时默认英文，不跟随系统语言
   return "en";
 }
 

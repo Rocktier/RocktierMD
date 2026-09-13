@@ -440,10 +440,10 @@ export const FindReplace = memo(function FindReplace({
 
       {/* Options */}
       <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0, fontSize: "11px" }}>
-        <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} title="Match case" bordered active={caseSensitive}>
+        <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} title={t("find.matchCase")} bordered active={caseSensitive}>
           Aa
         </FindReplaceButton>
-        <FindReplaceButton onClick={() => setUseRegex((v) => !v)} title="Use regex" bordered active={useRegex}>
+        <FindReplaceButton onClick={() => setUseRegex((v) => !v)} title={t("find.useRegex")} bordered active={useRegex}>
           .*
         </FindReplaceButton>
       </div>

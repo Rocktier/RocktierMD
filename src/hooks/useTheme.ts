@@ -7,8 +7,13 @@ const THEMES: readonly Theme[] = ["dark", "light", "system"];
 
 function readStoredTheme(): Theme {
   if (typeof window === "undefined") return "system";
-  const stored = localStorage.getItem(THEME_KEY) as Theme | null;
-  return stored && THEMES.includes(stored) ? stored : "system";
+  try {
+    const stored = localStorage.getItem(THEME_KEY) as Theme | null;
+    return stored && THEMES.includes(stored) ? stored : "system";
+  } catch {
+    // 隐私模式 / 存储被禁用：偏好读取失败不能把整个 App 渲染打挂
+    return "system";
+  }
 }
 
 function getSystemTheme(): "dark" | "light" {
@@ -46,6 +51,10 @@ function applyResolved(resolved: "dark" | "light") {
 
 export function toggleTheme() {
   const next: Theme = resolveTheme(readStoredTheme()) === "dark" ? "light" : "dark";
-  localStorage.setItem(THEME_KEY, next);
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    // ignore — theme still applies for this session
+  }
   applyResolved(next);
 }
