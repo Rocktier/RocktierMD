@@ -27,6 +27,11 @@ pub struct CloseWatch {
 ///   前端挂载，所以先缓冲在这里，前端挂载后再用 `initial_file` 拉取。
 pub struct InitialFile(pub Mutex<Option<String>>);
 
+/// 启动期到达的文档队列（tao#1235：冷启动时 `application:openURLs:` 早于
+/// setup/托管状态，`try_state` 拿不到任何东西，必须在进程级静态里排队，
+/// setup 完成后再搬进 `InitialFile`。Chromium 的 `_startupComplete` 同款）。
+static PENDING_DOCS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 /// 与前端 `MARKDOWN_EXTS` 保持一致。只关联 Markdown 家族：把 txt/text 也抢过来
 /// 会顶掉记事本等既有关联，且资源管理器「类型」列会被污染成 Markdown。
 const MARKDOWN_EXTS: [&str; 8] = [
@@ -364,7 +369,36 @@ pub fn run() {
             });
             // 双击关联文件启动时（Windows/Linux）路径在 argv 里，先缓冲起来。
             app.manage(InitialFile(Mutex::new(file_from_args())));
+            // tao#1235：把冷启动队列里的文档搬进托管状态（setup 晚于
+            // application:openURLs:，此刻托管状态与窗口才真正可用）。
+            let queued: Vec<String> = PENDING_DOCS
+                .lock()
+                .expect("PENDING_DOCS poisoned")
+                .drain(..)
+                .collect();
+            if let Some(first) = queued.first() {
+                if let Some(state) = app.try_state::<InitialFile>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(first.clone());
+                    }
+                }
+            }
             Ok(())
+        })
+        // 冷启动竞态补发：Opened 事件可能落在「前端查询 initial_file 之后、
+        // 监听器挂载之前」的空窗里（实测复现）。页面加载完成时若仍有待开文档，
+        // 再补发一次 —— 前端对同一文档有去重，不会弹两次。
+        .on_page_load(|window, payload| {
+            if !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                return;
+            }
+            if let Some(state) = window.app_handle().try_state::<InitialFile>() {
+                if let Ok(slot) = state.0.lock() {
+                    if let Some(path) = slot.as_ref() {
+                        let _ = window.emit("open-file", path.clone());
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             force_close,
@@ -439,6 +473,13 @@ pub fn run() {
                 if !is_markdown_path(std::path::Path::new(path)) {
                     continue;
                 }
+                // tao#1235：冷启动时该事件在 setup/托管状态存在之前直达（urls 空、
+                // try_state 为 None 都可能发生），所以先入进程级队列，setup 再搬运。
+                PENDING_DOCS
+                    .lock()
+                    .expect("PENDING_DOCS poisoned")
+                    .push(path.to_string());
+                // 热启动（应用已运行）：托管状态与前端监听都在，立即送达。
                 if let Some(state) = _app_handle.try_state::<InitialFile>() {
                     if let Ok(mut slot) = state.0.lock() {
                         *slot = Some(path.to_string());
