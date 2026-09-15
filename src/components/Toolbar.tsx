@@ -50,7 +50,22 @@ export const Toolbar = memo(function Toolbar({
           </svg>
         </button>
         <div className="brand">
-          <span className="brand-dot" />
+          <svg className="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect className="brand-tile" x="1" y="1" width="30" height="30" rx="8.5" />
+            <text
+              className="brand-letters"
+              x="15.4"
+              y="16.6"
+              fontSize="15"
+              fontWeight="700"
+              letterSpacing="-1.1"
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              MD
+            </text>
+            <circle className="brand-pip" cx="25.6" cy="6.4" r="2.1" />
+          </svg>
           <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
         </div>
         <div className={`doc-pill ${modified ? "modified" : ""}`} title={modified ? t("toolbar.unsaved") : undefined}>

@@ -73,12 +73,27 @@
   margin-right: 4px;
 }
 
-.brand-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: var(--glow-sm);
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* Letter mark — the app-icon tile: dark in both themes so it matches the Dock
+   icon; the hairline border keeps it from vanishing on the near-black toolbar. */
+.brand-mark .brand-tile {
+  fill: #0a0a0a;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.brand-mark .brand-letters {
+  fill: #ffffff;
+  font-family: var(--font-sans);
+}
+
+.brand-mark .brand-pip {
+  fill: var(--red);
 }
 
 .brand-name {
