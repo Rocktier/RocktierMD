@@ -376,7 +376,7 @@ export default function App() {
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": toggleTheme(); break;
           case "website": void invoke('open_url', { url: 'https://rocktier.com/' }).catch(() => {}); break;
-          case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.studio' }).catch(() => {}); break;
+          case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.com' }).catch(() => {}); break;
         }
       })
       .then((fn) => {
