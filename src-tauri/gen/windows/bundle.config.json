@@ -6,26 +6,7 @@
   },
   "extensions": {
     "shareTarget": false,
-    "fileAssociations": [
-      {
-        "description": "Markdown document",
-        "extensions": [
-          ".md",
-          ".markdown",
-          ".mdown",
-          ".mkd"
-        ],
-        "name": "Markdown document"
-      },
-      {
-        "description": "Plain text",
-        "extensions": [
-          ".txt",
-          ".text"
-        ],
-        "name": "Text file"
-      }
-    ],
+    "fileAssociations": [],
     "protocolHandlers": []
   },
   "signing": {
