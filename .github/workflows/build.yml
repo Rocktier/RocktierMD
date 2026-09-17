@@ -81,7 +81,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # 20, matching the two family projects whose MSIX actually packs. Only the
+          # checks job needs a newer Node (jsdom), and this one does not run vitest.
+          node-version: 20
           cache: 'npm'
       - uses: dtolnay/rust-toolchain@stable
         with:
