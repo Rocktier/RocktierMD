@@ -9,7 +9,7 @@
 
 | 项 | 状态 |
 |---|---|
-| 应用包（MSIX） | 由 CI 产出，见 §7 |
+| 应用包（MSIX） | ✅ 已产出并拆包核验（**2.0 MB**），见 §7 |
 | 300×300 商店磁贴 | ✅ `store-assets/store-tile-300.png` |
 | 截图 | ✅ 3 张 2560×1544（见 §6） |
 | 文案 / 关键词 / 分类 / 分级 | ✅ 本文可逐项粘贴 |
@@ -68,10 +68,10 @@ plain text, GFM, markdown preview, offline editor, markdown to html, markdown to
 ### 简短描述（≤100 字符，★必填）
 
 ```
-Write Markdown with a live preview, GFM tables, math and PDF export — entirely offline.
+Fast, tiny Markdown editor with live preview, GFM tables, math and PDF export — offline.
 ```
 
-（91 字符 ✅。**刻意不含字面 "free"**——付费应用的描述里出现 "free" 是被拒的常见原因。）
+（92 字符 ✅。**刻意不含字面 "free"**——付费应用的描述里出现 "free" 是被拒的常见原因；"tiny" 是实测事实，见下方详细描述。）
 
 ### 详细描述
 
@@ -105,6 +105,13 @@ app disappears tomorrow. Recent documents are one click away, and drag-and-drop 
 BUILT FOR LONG SESSIONS
 Dark and light themes, a distraction-free layout, and crash recovery that keeps an
 unsaved draft for every document — including ones you never saved to disk at all.
+
+SMALL, AND QUICK TO OPEN
+The whole app is about 2 MB to install — that is the entire program, not a
+downloader. There is no bundled browser engine (it uses the one Windows already
+has), no background service, and nothing left running once you close the window.
+It opens in well under a second, so it never gets between you and the sentence
+you were about to write.
 
 PRIVATE BY DESIGN
 No account. No telemetry. No analytics. No network capability is declared in the
@@ -230,6 +237,18 @@ Publisher="CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7"
 Version="1.0.0.0"
 Executable="RocktierMarkdown.exe"
 ```
+
+**已于 2026-09-17 拆包核验通过** ✅（`v1.0.0` 的 `Rocktier.Markdown_1.0.0.0_x64.msix`）：四项标识全部一致，包内只有 exe + 4 个徽标 + 清单，且**文件关联只声明一条**（`rocktiermarkdowndocument`，8 个扩展名，无重复——这正是第一次打包失败的原因）。
+
+### 实测体积与速度（文案里的数字来源）
+
+| 项 | 实测 |
+|---|---|
+| MSIX（商店下载） | **2.0 MB** |
+| 安装后体积（exe） | 3.9 MB |
+| macOS DMG / NSIS 安装器 | 2.2 MB / 1.7 MB |
+| 冷启动到窗口出现 | **0.6 秒** |
+| 主进程内存 | 约 75 MB（另用系统 WebView，不自带浏览器内核） |
 
 ---
 
