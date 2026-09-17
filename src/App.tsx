@@ -17,7 +17,7 @@ import {
 import {
   openFile, saveFile, saveFileAs, confirmDialog, normalizeEol, applyEol, type Eol,
 } from "./services/file";
-import { exists, readTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
 
@@ -238,29 +238,51 @@ export default function App() {
         // 前者避免拿别的文件的草稿来问（点"是"就把 B 灌进 A）；后者是唯一
         // 没有任何磁盘副本的一份——不主动问，用户崩溃后重开就等于全丢。
         const opened = restored; // 闭包内需要非空快照（let 的收窄进不了回调）
+        // list_recovery 已按 modified_ms 倒序，故 [0] 即最新一份。
+        // 普通启动时若没有未命名草稿，退而取最新的「命名文件」草稿——此前只查
+        // __untitled__，命名文件的草稿在普通启动下永远不会被列出，用户崩溃前
+        // 编辑的已命名文档等于找不回来。
+        const namedDrafts = entries.filter((e) => e.path !== UNTITLED_KEY);
         const draft = opened
           ? entries.find((e) => e.path === opened.path)
-          : entries.find((e) => e.path === UNTITLED_KEY);
+          : entries.find((e) => e.path === UNTITLED_KEY) ?? namedDrafts[0];
         if (draft && !cancelled) {
           const untitled = draft.path === UNTITLED_KEY;
           if (!untitled && restored && restored.path === draft.path && restored.content === draft.content) {
             // 草稿与磁盘内容一致（上次正常保存过），直接清掉
             await invoke("clear_recovery", { path: draft.path }).catch(() => {});
-          } else if (await confirmDialog(t(untitled ? "confirm.recoverUntitled" : "confirm.recover"))) {
-            if (!cancelled) {
-              restored = {
-                path: untitled ? null : draft.path,
-                content: draft.content,
-                modified: true,
-              };
-            }
-            // 注意：接受恢复时不清草稿——用户可能看完就关掉窗口，
-            // 那时草稿是这份内容的唯一副本，要留到真正保存成功再清。
           } else {
-            // 用户拒绝恢复 → 清掉这份草稿，下次不再打扰。
-            // 这里用 draft.path（而非 restored?.path）：后者为 null 时旧代码永远清不掉，
-            // 于是同一个恢复提示每次启动都会弹一遍。
-            await invoke("clear_recovery", { path: draft.path }).catch(() => {});
+            // 普通启动命中「命名文件」草稿时，必须让用户看出草稿比磁盘新还是旧，
+            // 否则可能拿旧内容覆盖磁盘上更新的内容。
+            let message = t(untitled ? "confirm.recoverUntitled" : "confirm.recover");
+            if (!untitled && !opened) {
+              const name = draft.path.replace(/^.*[\\/]/, "");
+              let stale = false;
+              try {
+                const info = await stat(draft.path);
+                stale = (info.mtime ? info.mtime.getTime() : 0) > draft.modified_ms;
+              } catch {
+                // 磁盘文件不存在或不可读 → 草稿是唯一副本，按「新」处理
+              }
+              message = t(stale ? "confirm.recoverNamedOlder" : "confirm.recoverNamedNewer", { name });
+              if (namedDrafts.length > 1) {
+                message += "\n\n" + t("confirm.recoverNamedCount", { n: namedDrafts.length });
+              }
+            }
+            if (await confirmDialog(message)) {
+              if (!cancelled) {
+                restored = {
+                  path: untitled ? null : draft.path,
+                  content: draft.content,
+                  modified: true,
+                };
+              }
+              // 注意：接受恢复时不清草稿——用户可能看完就关掉窗口，
+              // 那时草稿是这份内容的唯一副本，要留到真正保存成功再清。
+            } else {
+              // 用户拒绝恢复 → 清掉这份草稿，下次不再打扰。
+              await invoke("clear_recovery", { path: draft.path }).catch(() => {});
+            }
           }
         }
       } catch {
@@ -558,8 +580,9 @@ export default function App() {
   // ── Auto-save: debounced write to recovery file every 5s of inactivity ──
   const autoSave = useCallback(async (path: string | null, content: string) => {
     // 新建文档还没有路径，用合成 key 兜住——崩溃恢复最该保住的就是从未落盘的文档
-    if (!content.trim()) return;
     if (!path) path = UNTITLED_KEY;
+    // 不再因内容为空就跳过：清空文档本身是一次编辑，跳过会让崩溃/重启后恢复出
+    // 清空前的旧内容。调用点上游已有 doc.modified 守卫，只在真有改动时才会走到这里。
     if (!isTauri) return;
     try {
       await invoke("save_recovery", { path, content });
@@ -683,8 +706,14 @@ export default function App() {
     if (!m) return null;
     const dir = path.replace(/[^/\\]+$/, "");
     const ext = m[1] === "jpeg" ? "jpg" : m[1];
-    const name = `paste-${Date.now()}.${ext}`;
+    // 只用毫秒时间戳命名：同一毫秒内两次粘贴会互相覆盖，文档里的旧链接会指向被
+    // 替换掉的图片。目标已存在时递增后缀去重（复用现有 exists，不加新依赖）。
+    const ts = Date.now();
+    let name = `paste-${ts}.${ext}`;
     try {
+      for (let i = 1; await exists(`${dir}assets/${name}`); i++) {
+        name = `paste-${ts}-${i}.${ext}`;
+      }
       await invoke("save_paste_image", { path: `${dir}assets/${name}`, data: m[2] });
       return `assets/${name}`;
     } catch {

@@ -288,7 +288,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             &PredefinedMenuItem::hide(app, None)?,
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &MenuItem::with_id(app, "quit", l("退出", "Quit"), true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
 
@@ -457,7 +457,21 @@ pub fn run() {
             build_menu
         ])
         .on_menu_event(|app, event| {
-            // 菜单项 → 前端：复用现有的动作处理链（未保存守卫、toast 等都在前端）
+            // ⌘Q / 应用菜单「退出」不能用 PredefinedMenuItem::quit：它直接 app.exit()，
+            // 绕过窗口关闭那条未保存守卫（CloseRequested → 前端 confirmDiscard → force_close）。
+            // 改为关闭主窗口，复用同一条已被验证的通道；前端未就绪/已崩溃时，
+            // on_window_event 里 !ready 会放行默认关闭，窗口销毁后底层触发 ExitRequested
+            // 正常退出——不会变成关不掉。取不到窗口时用 app.exit 兜底，保证 ⌘Q 不是死键。
+            if event.id().0.as_str() == "quit" {
+                match app.get_webview_window("main") {
+                    Some(window) => {
+                        let _ = window.close();
+                    }
+                    None => app.exit(0),
+                }
+                return;
+            }
+            // 其余菜单项 → 前端：复用现有的动作处理链（未保存守卫、toast 等都在前端）
             let _ = app.emit("menu-action", event.id().0.as_str());
         })
         .on_window_event(|window, event| {
