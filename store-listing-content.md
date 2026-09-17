@@ -1,4 +1,10 @@
-# Rocktier Markdown 1.0.0 — 微软商店提交资料
+# Rocktier Markdown 1.0.1 — 微软商店提交资料（全新首次提交）
+
+> **商店已分配的产品信息（Partner Center → 产品管理 → 包标识）**：
+> Store ID `9PGT4TS07GX0` · Package/Identity/Name `Rocktier.RocktierMarkdown` ·
+> Publisher `CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7` · PublisherDisplayName `Rocktier` ·
+> PFN `Rocktier.RocktierMarkdown_e0sb54jawjj5c`
+> 应用包的标识与之**逐字一致**（见 §1），无需任何调整。
 
 > 首次上架（不是更新）。本文是**唯一真源**，`~/Downloads/Rocktier-Markdown-MSStore/` 里的副本是工作用。
 > 配套素材在 `store-assets/`。
@@ -24,7 +30,7 @@
 | 应用名（商店显示） | **Rocktier Markdown** |
 | 包标识 `Identity/Name` | `Rocktier.RocktierMarkdown` |
 | 发布者 `Identity/Publisher` | `CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7` |
-| 版本 `Identity/Version` | `1.0.0.0`（商店从包清单读取，不手填） |
+| 版本 `Identity/Version` | `1.0.1.0`（商店从包清单读取，不手填） |
 | 架构 | x64 |
 | 可执行文件 | `RocktierMarkdown.exe` |
 
@@ -211,13 +217,13 @@ screencapture -x -R20,60,1280,772 store-assets/screenshot-1-editor.png
 CI 在推 `v*` 标签时产出 **DMG / MSI / NSIS / MSIX**，并且有 `checks` 前置任务先跑类型检查、单元测试、`cargo test` 与 `clippy`——**测试不过不出包**。
 
 ```bash
-gh release download v1.0.0 -R Rocktier/RocktierMD -p "*.msix" -D ~/Downloads/Rocktier-Markdown-MSStore
+gh release download v1.0.1 -R Rocktier/RocktierMD -p "*.msix" -D ~/Downloads/Rocktier-Markdown-MSStore
 ```
 
 手动重跑（不改版本）：
 
 ```bash
-gh workflow run build.yml --ref main -f release_tag=v1.0.0
+gh workflow run build.yml --ref main -f release_tag=v1.0.1
 ```
 
 > ⚠️ 手动触发**必须填 `release_tag`**，否则会拿分支名去上传。
@@ -234,7 +240,7 @@ unzip -p "$M" AppxManifest.xml | grep -E 'Name=|Version=|Publisher=|Executable='
 ```
 Name="Rocktier.RocktierMarkdown"
 Publisher="CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7"
-Version="1.0.0.0"
+Version="1.0.1.0"
 Executable="RocktierMarkdown.exe"
 ```
 
