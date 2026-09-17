@@ -71,7 +71,7 @@ plain text, GFM, markdown preview, offline editor, markdown to html, markdown to
 Fast, tiny Markdown editor with live preview, GFM tables, math and PDF export — offline.
 ```
 
-（92 字符 ✅。**刻意不含字面 "free"**——付费应用的描述里出现 "free" 是被拒的常见原因；"tiny" 是实测事实，见下方详细描述。）
+（**88 字符** ✅，脚本实测。**刻意不含字面 "free"**——付费应用的描述里出现 "free" 是被拒的常见原因；"tiny" 是实测事实，见下方详细描述里的数字。）
 
 ### 详细描述
 
@@ -103,15 +103,15 @@ Everything is a plain .md file. Open them with any editor, any time, even if thi
 app disappears tomorrow. Recent documents are one click away, and drag-and-drop works.
 
 BUILT FOR LONG SESSIONS
-Dark and light themes, a distraction-free layout, and crash recovery that keeps an
-unsaved draft for every document — including ones you never saved to disk at all.
+Dark and light themes, a layout that stays out of the way, and crash recovery that
+keeps an unsaved draft for every document — including ones you never saved to disk.
 
 SMALL, AND QUICK TO OPEN
 The whole app is about 2 MB to install — that is the entire program, not a
-downloader. There is no bundled browser engine (it uses the one Windows already
-has), no background service, and nothing left running once you close the window.
-It opens in well under a second, so it never gets between you and the sentence
-you were about to write.
+downloader. There is no bundled browser engine (it uses the webview your system
+already provides), no background service, and nothing left running once you
+close the window. It opens in well under a second, so it never gets between you
+and the sentence you were about to write.
 
 PRIVATE BY DESIGN
 No account. No telemetry. No analytics. No network capability is declared in the
