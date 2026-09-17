@@ -696,7 +696,6 @@ export default function App() {
   // against the current document's directory.
   const onOpenDocument = useCallback((filePath: string) => {
     (async () => {
-      if (!(await confirmDiscard())) return;
       let target = filePath;
       const isAbsolute = /^[/\\]/.test(filePath) || /^[A-Za-z]:[\\/]/.test(filePath);
       if (!isAbsolute) {
@@ -709,16 +708,12 @@ export default function App() {
         }
         target = resolvePath(base, target);
       }
-      try {
-        if (!(await exists(target))) { showToast(t("toast.fileNotExists")); return; }
-        const text = await readTextFile(target);
-        setDoc({ path: target, content: text, modified: false });
-        rememberPath(target);
-      } catch {
-        showToast(t("toast.cannotOpenFile"));
-      }
+      // 走同一个打开例程：它会归一化换行、清掉上一篇的恢复草稿、重设保存基线。
+      // 此前这里直接 setDoc，于是（a）从链接打开 CRLF 文档后保存会写成 \r\r\n，
+      // 把整份文件搞坏；（b）上一篇的草稿一直残留，可能在下次启动时把旧内容灌回来。
+      await openMarkdownPath(target);
     })();
-  }, [confirmDiscard, rememberPath, showToast]);
+  }, [openMarkdownPath, showToast]);
 
   // Inject frontmatter title into document title (for PDF export / window title)
   useEffect(() => {
