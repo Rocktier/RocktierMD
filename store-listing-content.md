@@ -11,7 +11,7 @@
 |---|---|
 | 应用包（MSIX） | 由 CI 产出，见 §7 |
 | 300×300 商店磁贴 | ✅ `store-assets/store-tile-300.png` |
-| 截图 | ❌ **待拍**（见 §6） |
+| 截图 | ✅ 3 张 2560×1544（见 §6） |
 | 文案 / 关键词 / 分类 / 分级 | ✅ 本文可逐项粘贴 |
 | Partner Center 预留名 | ⚠️ 需确认是否为 `Rocktier.RocktierMarkdown`（见 §1） |
 
@@ -160,18 +160,42 @@ First release.
 
 > 磁贴由 `src-tauri/icons/icon.svg` 直接栅格化（`rsvg-convert -w 300 -h 300`），与包内图标同源，不会漂移。
 
-### 待拍：截图（★商店至少需要 1 张）
+### 截图（2560×1544，家族统一规格）
 
-建议 4 张，尺寸 **2560×1544**（家族统一，= 1280×772 @2x）：
-
-| # | 画面 | 展示点 |
+| # | 文件 | 画面 |
 |---|---|---|
-| 1 | 分栏编辑态（左源码 + 右渲染） | 主界面 |
-| 2 | 长文档 + 大纲侧栏 | TOC / 文档结构 |
-| 3 | 代码块 + KaTeX 数学公式 | GFM 与公式 |
-| 4 | 深色主题 + 查找替换栏 | 主题与查找 |
+| 1 | `store-assets/screenshot-1-editor.png` | 分栏编辑态（左源码 + 右渲染），浅色 |
+| 2 | `store-assets/screenshot-2-code-math.png` | 代码高亮 + KaTeX 公式 + 表格，浅色 |
+| 3 | `store-assets/screenshot-3-dark.png` | 同上画面，深色主题 |
 
-要求：**不要出现个人内容**（真实笔记、文件名、路径），用示例文档；横屏。
+配套示例文档：`store-assets/demo.md`、`store-assets/demo-code-math.md`（后者把代码/公式放在首屏，无需滚动）。
+
+**拍摄方法**（可复现，供 1.0.1 重拍）：
+
+```bash
+# 1. 构建应用（本地 node_modules 需完整，否则 tauri CLI 不可用）
+npm install && npm run tauri -- build --bundles app
+
+# 2. 打开示例文档
+open -a "<repo>/src-tauri/target/release/bundle/macos/Rocktier Markdown.app" \
+     "<repo>/store-assets/demo.md"
+
+# 3. 激活应用 + 固定窗口（MD 用隐藏标题栏，内容从窗口原点开始，所以 y 不加偏移）
+osascript -e 'tell application "Rocktier Markdown" to activate'
+osascript -e 'tell application "System Events" to tell process "Rocktier Markdown" to set frontmost to true'
+osascript -e 'tell application "System Events" to tell process "Rocktier Markdown" to set position of window 1 to {20, 60}'
+osascript -e 'tell application "System Events" to tell process "Rocktier Markdown" to set size of window 1 to {1280, 772}'
+
+# 4. 截图（区域 = 窗口内容区，Retina 2x → 2560×1544）
+screencapture -x -R20,60,1280,772 store-assets/screenshot-1-editor.png
+```
+
+**三条实战教训**：
+
+- **必须先把应用激活并确认 `frontmost`，再截图**——否则抓到的是当前最前窗口（本机是 IDE），我已踩过两次。
+- **不要试图用按键滚动或往搜索框打字**：按键会落进编辑区（实测把文档标题改成了 "Code, MaTable and Tables"）。要展示某段内容，就**另写一份把该段放在首屏的示例文档**。
+- **侧栏不做截图**：它列出最近打开的文件，可能带出真实笔记路径，违反"不得出现个人内容"。
+- 主题切换走菜单（`View > Toggle Theme`），比点工具栏图标可靠；深色下平均亮度 ≈ 11、浅色 ≈ 245，可用 `PIL` 一行自查（不必逐张看图）。
 
 ---
 
