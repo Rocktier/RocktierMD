@@ -131,7 +131,7 @@ fn recovery_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 fn recovery_file_name(path: &str) -> String {
-    let safe_name = path.replace(|c: char| c == '/' || c == '\\' || c == ':', "_");
+    let safe_name = path.replace(['/', '\\', ':'], "_");
     format!("{}-{}.json", safe_name, short_hash(path))
 }
 
@@ -155,6 +155,38 @@ fn save_recovery(app: tauri::AppHandle, path: String, content: String) -> Result
     let tmp = dir.join(format!("{}.tmp", recovery_file_name(&path)));
     std::fs::write(&tmp, payload.to_string()).map_err(|e| e.to_string())?;
     match std::fs::rename(&tmp, &file) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e.to_string())
+        }
+    }
+}
+
+/// Writes a document to disk atomically: temp file in the same directory, then
+/// rename.
+///
+/// The fs plugin's `writeTextFile` truncates the target in place, so a crash, a
+/// full disk or a permission error halfway through destroys the user's original
+/// document — the one file an editor must never damage. Recovery drafts already
+/// used this pattern (see `save_recovery`); actual user documents did not.
+#[tauri::command]
+#[cfg(desktop)]
+fn save_document(path: String, content: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&path);
+    let dir = target
+        .parent()
+        .ok_or_else(|| "invalid path".to_string())?
+        .to_path_buf();
+    let name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "invalid file name".to_string())?;
+    // Dotted temp name so a leftover never looks like the document itself, and
+    // so a crash mid-write leaves the original untouched.
+    let tmp = dir.join(format!(".{}.{}.tmp", name, std::process::id()));
+    std::fs::write(&tmp, content).map_err(|e| e.to_string())?;
+    match std::fs::rename(&tmp, &target) {
         Ok(()) => Ok(()),
         Err(e) => {
             let _ = std::fs::remove_file(&tmp);
@@ -417,6 +449,7 @@ pub fn run() {
             open_url,
             git_branch,
             save_recovery,
+            save_document,
             list_recovery,
             clear_recovery,
             initial_file,
@@ -501,4 +534,45 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_hash_is_stable_and_distinguishes_paths() {
+        assert_eq!(short_hash("/a/b.md"), short_hash("/a/b.md"));
+        assert_ne!(short_hash("/a/b.md"), short_hash("/a/c.md"));
+        assert_eq!(short_hash("x").len(), 8);
+    }
+
+    // All drafts live in one flat directory, so the file name must be safe for
+    // the filesystem: a raw Windows path would otherwise try to create
+    // subdirectories (and a drive-letter colon is outright invalid there).
+    #[test]
+    fn recovery_file_name_is_filesystem_safe() {
+        let n = recovery_file_name("C:\\Users\\me\\My Docs\\notes.md");
+        assert!(!n.contains('/'), "{n}");
+        assert!(!n.contains('\\'), "{n}");
+        assert!(!n.contains(':'), "{n}");
+        assert!(n.ends_with(".json"), "{n}");
+    }
+
+    // Two documents with the same base name in different folders must not share
+    // a draft — the hash is what keeps them apart.
+    #[test]
+    fn recovery_file_name_is_unique_per_directory() {
+        assert_ne!(
+            recovery_file_name("/work/a/notes.md"),
+            recovery_file_name("/work/b/notes.md")
+        );
+    }
+
+    #[test]
+    fn recovery_file_name_survives_non_ascii_paths() {
+        let n = recovery_file_name("/Users/me/笔记/草稿.md");
+        assert!(n.ends_with(".json"), "{n}");
+        assert!(n.contains("草稿.md"), "{n}");
+    }
 }

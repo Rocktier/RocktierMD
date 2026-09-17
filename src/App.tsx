@@ -14,7 +14,9 @@ import {
   parseDocument, extractHeadings, readStats, getTaskLines, parseFrontmatter,
   type Frontmatter,
 } from "./services/markdown";
-import { openFile, saveFile, saveFileAs, confirmDialog } from "./services/file";
+import {
+  openFile, saveFile, saveFileAs, confirmDialog, normalizeEol, applyEol, type Eol,
+} from "./services/file";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
@@ -82,6 +84,22 @@ export default function App() {
   // 基线所属的文件路径：文档切换时基线必须跟着换（外部修改检测依赖它）
   const lastPathRef = useRef<string | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 文档原始换行风格：读取时记录、保存时还原。textarea 会把 CRLF 归一成 LF，
+  // 不还原就会在首次编辑后把整份文件的换行改写。
+  const eolRef = useRef<Eol>("\n");
+
+  // 草稿是"尚未落盘的内容"的唯一副本，只在这些时刻清除：
+  // 内容已成功写盘、或用户明确选择丢弃/不恢复。
+  const clearRecovery = useCallback((key: string | null | undefined) => {
+    if (!key || !isTauri) return;
+    invoke("clear_recovery", { path: key }).catch(() => {});
+  }, []);
+
+  // 切换文档前清掉上一个文档的草稿（调用点都在"用户已确认丢弃"之后）
+  const clearPreviousDrafts = useCallback(() => {
+    clearRecovery(docRef.current.path);
+    if (docRef.current.modified || !docRef.current.path) clearRecovery(UNTITLED_KEY);
+  }, [clearRecovery, UNTITLED_KEY]);
   const externalCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { onEditorScroll, onPreviewScroll } = useScrollSync(editorRef, previewRef);
 
@@ -198,8 +216,11 @@ export default function App() {
         if (!raw) continue;
         try {
           if (await exists(raw)) {
-            const text = await readTextFile(raw);
-            if (!cancelled) restored = { path: raw, content: text, modified: false };
+            const { content, eol } = normalizeEol(await readTextFile(raw));
+            if (!cancelled) {
+              eolRef.current = eol;
+              restored = { path: raw, content, modified: false };
+            }
             break;
           }
         } catch {
@@ -213,18 +234,28 @@ export default function App() {
         const entries = await invoke<
           Array<{ path: string; content: string; modified_ms: number }>
         >("list_recovery");
-        // 只恢复「当前文档」的草稿。普通启动（没打开文件）不弹恢复询问——
-        // 否则会拿 entries[0]（别的文件的草稿）来问，用户点"是"就等于把 B 的内容灌进 A。
+        // 只恢复「当前文档」的草稿，外加普通启动时的「未命名草稿」。
+        // 前者避免拿别的文件的草稿来问（点"是"就把 B 灌进 A）；后者是唯一
+        // 没有任何磁盘副本的一份——不主动问，用户崩溃后重开就等于全丢。
         const opened = restored; // 闭包内需要非空快照（let 的收窄进不了回调）
-        const draft = opened ? entries.find((e) => e.path === opened.path) : undefined;
+        const draft = opened
+          ? entries.find((e) => e.path === opened.path)
+          : entries.find((e) => e.path === UNTITLED_KEY);
         if (draft && !cancelled) {
-          if (restored && restored.path === draft.path && restored.content === draft.content) {
+          const untitled = draft.path === UNTITLED_KEY;
+          if (!untitled && restored && restored.path === draft.path && restored.content === draft.content) {
             // 草稿与磁盘内容一致（上次正常保存过），直接清掉
             await invoke("clear_recovery", { path: draft.path }).catch(() => {});
-          } else if (await confirmDialog(t("confirm.recover"))) {
+          } else if (await confirmDialog(t(untitled ? "confirm.recoverUntitled" : "confirm.recover"))) {
             if (!cancelled) {
-              restored = { path: draft.path, content: draft.content, modified: true };
+              restored = {
+                path: untitled ? null : draft.path,
+                content: draft.content,
+                modified: true,
+              };
             }
+            // 注意：接受恢复时不清草稿——用户可能看完就关掉窗口，
+            // 那时草稿是这份内容的唯一副本，要留到真正保存成功再清。
           } else {
             // 用户拒绝恢复 → 清掉这份草稿，下次不再打扰。
             // 这里用 draft.path（而非 restored?.path）：后者为 null 时旧代码永远清不掉，
@@ -281,53 +312,72 @@ export default function App() {
     if (!(await confirmDiscard())) return;
     const r = await openFile();
     if (r) {
+      clearPreviousDrafts();
+      eolRef.current = r.eol;
+      lastSavedContentRef.current = r.content;
+      lastPathRef.current = r.path;
       setDoc({ path: r.path, content: r.content, modified: false });
       rememberPath(r.path);
       showToast(t("toast.fileOpened"));
     }
-  }, [confirmDiscard, showToast, rememberPath]);
+  }, [confirmDiscard, showToast, rememberPath, clearPreviousDrafts]);
 
   const doSave = useCallback(async () => {
     const { path, content } = docRef.current;
+    // 写盘用文档原本的换行风格（内存里统一是 LF）
+    const payload = applyEol(content, eolRef.current);
     try {
       if (!path) {
-        const p = await saveFileAs(content);
+        const p = await saveFileAs(payload);
         if (!p) return;
         // 与主分支保持一致：另存成功同样是"已真正保存到磁盘"，
         // 同步基线，缩小外部变更检测的空窗（复审 F11）。
         lastSavedContentRef.current = content;
-        setDoc((d) => ({ ...d, path: p, modified: false }));
+        lastPathRef.current = p;
+        // 内容已落盘，草稿（这份内容的唯一旧副本）可以清了
+        clearRecovery(UNTITLED_KEY);
+        setDoc((d) => (d.content === content ? { ...d, path: p, modified: false } : { ...d, path: p }));
         rememberPath(p);
       } else {
-        await saveFile(path, content);
+        await saveFile(path, payload);
         lastSavedContentRef.current = content;
-        setDoc((d) => ({ ...d, modified: false }));
+        clearRecovery(path);
+        // 等待写盘期间用户可能又输入了：只有内容未变才敢标记为已保存
+        setDoc((d) => (d.content === content ? { ...d, modified: false } : d));
       }
       showToast(t("toast.saved"));
     } catch {
       showToast(t("toast.saveFailed"));
     }
-  }, [showToast, rememberPath]);
+  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY]);
 
   const doSaveAs = useCallback(async () => {
+    const content = docRef.current.content;
     try {
       const name = docRef.current.path ? baseName(docRef.current.path) : undefined;
-      const p = await saveFileAs(docRef.current.content, name);
+      const p = await saveFileAs(applyEol(content, eolRef.current), name);
       if (p) {
-        setDoc((d) => ({ ...d, path: p, modified: false }));
+        // 与 doSave 保持一致：另存也是一次真正的落盘，基线要跟着走
+        lastSavedContentRef.current = content;
+        lastPathRef.current = p;
+        clearRecovery(UNTITLED_KEY);
+        clearRecovery(docRef.current.path);
+        setDoc((d) => (d.content === content ? { ...d, path: p, modified: false } : { ...d, path: p }));
         rememberPath(p);
         showToast(t("toast.savedAs"));
       }
     } catch {
       showToast(t("toast.saveFailed"));
     }
-  }, [showToast, rememberPath]);
+  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY]);
 
   const doNew = useCallback(async () => {
     if (!(await confirmDiscard())) return;
+    clearPreviousDrafts();
+    eolRef.current = "\n";
     setDoc({ path: null, content: "", modified: false });
     showToast(t("toast.newDoc"));
-  }, [confirmDiscard, showToast]);
+  }, [confirmDiscard, showToast, clearPreviousDrafts]);
 
   // 原生菜单跟随 UI 语言重建（macOS 顶栏的 文件/编辑/显示/窗口，本轮问题 2）
   useEffect(() => {
@@ -403,7 +453,7 @@ export default function App() {
   );
   useKeyboardShortcuts(shortcuts);
 
-  const displayName = doc.path ? baseName(doc.path) : "Untitled";
+  const displayName = doc.path ? baseName(doc.path) : t("doc.untitled");
   const hasFrontmatter = frontmatterData !== null;
 
   // 在桌面端通过 Tauri 拖放事件 / 浏览器 dev 通过 HTML5 拖放打开文件。
@@ -421,8 +471,12 @@ export default function App() {
         showToast(t("toast.fileNotExists"));
         return false;
       }
-      const text = await readTextFile(path);
-      setDoc({ path, content: text, modified: false });
+      const { content, eol } = normalizeEol(await readTextFile(path));
+      clearPreviousDrafts();
+      eolRef.current = eol;
+      lastSavedContentRef.current = content;
+      lastPathRef.current = path;
+      setDoc({ path, content, modified: false });
       rememberPath(path);
       showToast(t("toast.fileOpened"));
       return true;
@@ -430,7 +484,7 @@ export default function App() {
       showToast(t("toast.cannotReadFile"));
       return false;
     }
-  }, [confirmDiscard, rememberPath, showToast]);
+  }, [confirmDiscard, rememberPath, showToast, clearPreviousDrafts]);
 
   // Drag-and-drop file open (browser dev fallback; desktop uses onDragDropEvent)
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -444,8 +498,9 @@ export default function App() {
     }
     if (!(await confirmDiscard())) return;
     try {
-      const text = await (file as any).text();
-      setDoc({ path: (file as any).path ?? null, content: text, modified: false });
+      const { content, eol } = normalizeEol(await (file as any).text());
+      eolRef.current = eol;
+      setDoc({ path: (file as any).path ?? null, content, modified: false });
       if ((file as any).path) rememberPath((file as any).path);
       showToast(t("toast.fileOpened"));
     } catch {
@@ -539,7 +594,8 @@ export default function App() {
     checkingRef.current = true;
     try {
       if (!(await exists(path))) return;
-      const diskContent = await readTextFile(path);
+      // 先归一化再比较：基线是 LF，CRLF 文件不归一会被每轮轮询误判成"外部修改"
+      const { content: diskContent, eol } = normalizeEol(await readTextFile(path));
       // 文档刚被切换/载入过：基线还停留在上一个文件，先以磁盘内容重建基线再比较。
       if (lastPathRef.current !== path) {
         lastPathRef.current = path;
@@ -554,6 +610,7 @@ export default function App() {
       // File changed on disk and differs from current doc
       const choice = await confirmDialog(t("confirm.externalChange"));
       if (choice) {
+        eolRef.current = eol;
         setDoc({ path, content: diskContent, modified: false });
         lastSavedContentRef.current = diskContent;
         showToast(t("toast.reloaded"));

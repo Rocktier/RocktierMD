@@ -296,7 +296,9 @@ export const FindReplace = memo(function FindReplace({
         // Escape regex special chars for literal replace
         const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const flags = caseSensitive ? "g" : "gi";
-        newContent = content.replace(new RegExp(escaped, flags), replaceText);
+        // 函数式替换：字面量模式下 $& / $1 必须原样输出，否则"替换成 $&"会变成
+        // 插入匹配内容（"替换当前"走 splice 是字面语义，两处必须一致）
+        newContent = content.replace(new RegExp(escaped, flags), () => replaceText);
       }
     } catch {
       return;

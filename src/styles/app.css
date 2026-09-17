@@ -24,8 +24,7 @@
   align-items: center;
   justify-content: space-between;
   height: var(--toolbar-h);
-  /* Left padding = 70px to clear macOS traffic lights in Overlay titlebar */
-  padding: 0 12px 0 70px;
+  padding: 0 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   position: relative;
@@ -33,7 +32,14 @@
   flex-shrink: 0;
   gap: 12px;
   transition: background-color var(--dur-normal) var(--ease),
-              border-color var(--dur-normal) var(--ease);
+             border-color var(--dur-normal) var(--ease);
+}
+
+/* The 70px offset exists to clear the macOS traffic lights in the Overlay
+   titlebar. Windows keeps its native titlebar, so it must not pay the same tax.
+   `is-mac` is set from main.tsx at startup. */
+html.is-mac .toolbar {
+  padding-left: 70px;
 }
 
 .toolbar::after {

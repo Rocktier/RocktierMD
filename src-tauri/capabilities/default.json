@@ -30,9 +30,7 @@
         { "path": "$APPCACHE/**" },
         { "path": "$APPCACHE" },
         { "path": "$APPLOG/**" },
-        { "path": "$APPLOG" },
-        { "path": "**/.*" },
-        { "path": "**/.*/**" }
+        { "path": "$APPLOG" }
       ]
     },
     {

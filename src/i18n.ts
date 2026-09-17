@@ -6,6 +6,10 @@ type Lang = "zh" | "en";
 
 const STORE_KEY = "rocktier-md-lang";
 
+/** ⌘ on macOS, Ctrl+ elsewhere — the shortcut hints are written with ⌘ in the dictionary. */
+const MOD_KEY =
+  typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl+";
+
 const STRINGS = {
   zh: {
     "sidebar.files": "文件",
@@ -63,6 +67,8 @@ const STRINGS = {
     "confirm.discard": "当前文档有未保存的更改，确定要丢弃吗？",
     "confirm.externalChange": "文件已在外部被修改。是否重新加载？未保存的更改将丢失。",
     "confirm.recover": "检测到未保存的草稿，是否恢复？",
+    "confirm.recoverUntitled": "检测到一份从未保存的新文档草稿，是否恢复？",
+    "doc.untitled": "未命名",
     "status.words": "{n} 词",
     "status.lineCol": "行 {line}，列 {col}",
     "fm.title": "文档信息",
@@ -130,6 +136,8 @@ const STRINGS = {
     "confirm.discard": "This document has unsaved changes. Discard them?",
     "confirm.externalChange": "The file was changed externally. Reload it? Unsaved changes will be lost.",
     "confirm.recover": "An unsaved draft was found. Restore it?",
+    "confirm.recoverUntitled": "An unsaved new document was found. Restore it?",
+    "doc.untitled": "Untitled",
     "status.words": "{n} words",
     "status.lineCol": "Ln {line}, Col {col}",
     "fm.title": "Document info",
@@ -182,7 +190,8 @@ export function t(key: UiKey, params?: Record<string, string | number>): string 
       text = text.replaceAll(`{${k}}`, String(v));
     }
   }
-  return text;
+  // 快捷键文案里的 ⌘ 集中替换：Windows 上显示 Ctrl+（此前按钮提示恒为 ⌘S）
+  return text.replaceAll("⌘", MOD_KEY);
 }
 
 /** 订阅语言变化：语言切换时触发组件重渲染。 */

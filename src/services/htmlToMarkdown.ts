@@ -22,6 +22,10 @@ export function htmlToMarkdown(html: string): string {
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as Element;
         const tag = el.tagName.toLowerCase();
+        // 嵌套列表由 block() 的 ul/ol 分支单独成行输出；这里再递归一次，
+        // 子项文本会先被拼进父项那一行（"<li>item<ul><li>sub</li></ul></li>"
+        // 会得到 "- itemsub" 再加一行 "- sub"）。
+        if (tag === "ul" || tag === "ol") return;
         const content = inline(el);
 
         switch (tag) {
