@@ -46,8 +46,9 @@
     "longDescription": "Rocktier Markdown - A fast, elegant, private Markdown reader. Part of the Rocktier family of creative tools."
   },
   "productName": "Rocktier Markdown",
-  "version": "0.1.0",
-  "identifier": "com.rocktier.markdown",
+  "mainBinaryName": "RocktierMarkdown",
+  "version": "1.0.0",
+  "identifier": "Rocktier.RocktierMarkdown",
   "app": {
     "windows": [
       {
@@ -65,7 +66,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
     }
   },
   "plugins": {

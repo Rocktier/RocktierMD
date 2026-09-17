@@ -1,6 +1,6 @@
 [package]
 name = "rocktier-markdown"
-version = "0.1.0"
+version = "1.0.0"
 description = "Fast, elegant Markdown reader and editor"
 authors = ["Rocktier"]
 edition = "2021"

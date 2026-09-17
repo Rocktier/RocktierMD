@@ -1,0 +1,39 @@
+{
+  "publisher": "CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7",
+  "publisherDisplayName": "Rocktier",
+  "capabilities": {
+    "general": []
+  },
+  "extensions": {
+    "shareTarget": false,
+    "fileAssociations": [
+      {
+        "description": "Markdown document",
+        "extensions": [
+          ".md",
+          ".markdown",
+          ".mdown",
+          ".mkd"
+        ],
+        "name": "Markdown document"
+      },
+      {
+        "description": "Plain text",
+        "extensions": [
+          ".txt",
+          ".text"
+        ],
+        "name": "Text file"
+      }
+    ],
+    "protocolHandlers": []
+  },
+  "signing": {
+    "pfx": null,
+    "pfxPassword": null
+  },
+  "resourceIndex": {
+    "enabled": false,
+    "keepConfig": false
+  }
+}
