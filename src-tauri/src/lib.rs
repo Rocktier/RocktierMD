@@ -153,7 +153,15 @@ fn save_recovery(app: tauri::AppHandle, path: String, content: String) -> Result
     // 原子写：fs::write 先 truncate 再写，崩溃落在两步之间会把旧草稿和新草稿一起毁掉，
     // 正是恢复机制要防的场景。改为写临时文件后 rename（同分区原子）。
     let tmp = dir.join(format!("{}.tmp", recovery_file_name(&path)));
-    std::fs::write(&tmp, payload.to_string()).map_err(|e| e.to_string())?;
+    {
+        use std::io::Write as _;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(payload.to_string().as_bytes()).map_err(|e| e.to_string())?;
+        // Without fsync the rename only publishes the name; the bytes may still be
+        // in the page cache, so a power loss can leave a zero-length draft — the
+        // recovery mechanism destroying the very thing it exists to protect.
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
     match std::fs::rename(&tmp, &file) {
         Ok(()) => Ok(()),
         Err(e) => {
@@ -183,17 +191,40 @@ fn save_document(path: String, content: String) -> Result<(), String> {
         .and_then(|n| n.to_str())
         .ok_or_else(|| "invalid file name".to_string())?;
     // Dotted temp name so a leftover never looks like the document itself, and
-    // so a crash mid-write leaves the original untouched.
-    let tmp = dir.join(format!(".{}.{}.tmp", name, std::process::id()));
-    std::fs::write(&tmp, content).map_err(|e| e.to_string())?;
-    match std::fs::rename(&tmp, &target) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp);
-            Err(e.to_string())
+    // so a crash mid-write leaves the original untouched. The PID alone is not
+    // enough: it is constant for the life of the process, so two saves racing
+    // (holding Cmd+S twice) would share one temp name and truncate each other.
+    // A per-process sequence number makes every write its own file.
+    let tmp = dir.join(format!(
+        ".{}.{}.{}.tmp",
+        name,
+        std::process::id(),
+        TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    {
+        use std::io::Write as _;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+        // rename() only publishes the name; without this the bytes may still be
+        // in the page cache, and a power loss leaves a zero-length document.
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
+    if let Err(e) = std::fs::rename(&tmp, &target) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    // Persist the rename itself, so the directory entry survives a crash too.
+    #[cfg(unix)]
+    {
+        if let Ok(d) = std::fs::File::open(&dir) {
+            let _ = d.sync_all();
         }
     }
+    Ok(())
 }
+
+/// Makes each concurrent save write to its own temp file. See `save_document`.
+static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Lists all recovery drafts, newest first. Frontend offers restore on launch.
 #[tauri::command]
