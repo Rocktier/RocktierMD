@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, type RefObject } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { slugify } from "../services/markdown";
 
 interface Props {
@@ -56,9 +57,21 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
         target?.scrollIntoView({ behavior: "smooth" });
         return;
       }
-      if (onOpenDocument && /\.(md|markdown)$/i.test(href) && !/^(https?:|mailto:)/.test(href)) {
+      // External links are dead inside a webview: Tauri swallows the navigation, so
+      // clicking one did nothing at all. Hand them to the OS — through the whitelist
+      // command, so only rocktier.com and mailto: can ever reach the browser.
+      if (/^(https?:|mailto:)/i.test(href)) {
         e.preventDefault();
-        onOpenDocument(href);
+        void invoke("open_url", { url: href }).catch(() => {});
+        return;
+      }
+      if (onOpenDocument && /\.(md|markdown)$/i.test(href)) {
+        e.preventDefault();
+        // A link written as `old%20notes.md` is a filename, not a URL — the
+        // percent-decoding is what makes such links resolve at all.
+        let decoded = href;
+        try { decoded = decodeURIComponent(href); } catch { /* not encoded; keep as is */ }
+        onOpenDocument(decoded);
       }
     };
 
