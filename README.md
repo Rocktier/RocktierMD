@@ -6,10 +6,18 @@ A **fast**, elegant Markdown reader and editor. Part of the [Rocktier](https://r
 
 ## Features
 
-- **Real-time rendering** — See your Markdown come alive as you type
-- **Lightning fast** — Built on Tauri + micromark; typing never waits for the preview
-- **Clean & elegant** — Nothing OS-inspired monochrome design
-- **By Rocktier** — Member of the Rocktier family (PDF Squeeze, pic2webp, Write, Markdown, Video)
+- **Real-time rendering** — see your Markdown come alive as you type
+- **Find & replace** — in-document search with next/previous navigation
+- **Export to PDF** — through the system print dialog, no bundled print engine
+- **Sidebar** — files and outline, hideable when you want the page and nothing else
+- **Opens from anywhere** — `.md` files are registered, so the app appears in "Open with"
+- **Saves safely** — writes go to a temporary file and are renamed into place, and an
+  interrupted session leaves a recovery draft rather than a truncated document
+- **Bilingual** — English (default) and 简体中文, switchable at runtime
+- **Lightning fast** — Tauri + micromark; typing never waits for the preview
+- **Clean & elegant** — Nothing OS-inspired monochrome design, light and dark
+- **By Rocktier** — member of the Rocktier family (Rocktier PDF, Rocktier CAD Viewer,
+  Rocktier pic2webp, Rocktier OCR)
 - **Privacy first** — 100% offline: no network access, no cloud, no tracking
 
 ## Architecture
@@ -45,6 +53,8 @@ npm run tauri:build
 ```
 
 ## Keyboard Shortcuts
+
+`⌘` on macOS, `Ctrl` on Windows.
 
 | Key            | Action              |
 |----------------|---------------------|
