@@ -102,6 +102,10 @@ html.is-mac .toolbar {
   fill: var(--red);
 }
 
+.brand-mark .brand-badge {
+  fill: #ffffff;
+}
+
 .brand-name {
   font-size: 13px;
   font-weight: 600;

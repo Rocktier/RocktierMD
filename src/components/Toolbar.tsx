@@ -54,17 +54,26 @@ export const Toolbar = memo(function Toolbar({
             <rect className="brand-tile" x="1" y="1" width="30" height="30" rx="8.5" />
             <text
               className="brand-letters"
-              x="15.4"
-              y="16.6"
-              fontSize="15"
+              x="17"
+              y="17.4"
+              fontSize="12"
               fontWeight="700"
-              letterSpacing="-1.1"
+              letterSpacing="-0.5"
               textAnchor="middle"
               dominantBaseline="central"
             >
               MD
             </text>
-            <circle className="brand-pip" cx="25.6" cy="6.4" r="2.1" />
+            <circle className="brand-badge" cx="8.6" cy="8.6" r="4.6" />
+            <path
+              d="M6.6 8.7l1.4 1.4 2.4-2.7"
+              stroke="#0a0a0a"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <circle className="brand-pip" cx="25.8" cy="6.2" r="2.2" />
           </svg>
           <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
         </div>
