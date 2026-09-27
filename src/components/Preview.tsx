@@ -1,9 +1,11 @@
 import { memo, useEffect, useRef, type RefObject } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { slugify } from "../services/markdown";
+import { resolvePath, baseDirOf } from "../services/path";
 
 interface Props {
   html: string;
+  filePath?: string;
   previewRef?: RefObject<HTMLDivElement>;
   onScroll?: () => void;
   onToggleTask?: (lineNumber: number, checked: boolean) => void;
@@ -28,7 +30,29 @@ function applyHeadingIds(root: HTMLElement) {
     });
 }
 
-export const Preview = memo(function Preview({ html, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument }: Props) {
+// Relative image sources ("![x](./assets/a.png)") point at the document's own
+// directory. Inside the webview they must become serveable asset:// URLs —
+// convertFileSrc is the only sanctioned way (direct file:// is blocked).
+function rewriteImageSources(root: HTMLElement, filePath?: string) {
+  if (!filePath) return;
+  const base = baseDirOf(filePath);
+  if (!base) return;
+  const imgs = root.querySelectorAll<HTMLImageElement>(".md-viewer img[src]");
+  imgs.forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    if (!src) return;
+    // 已可直接加载的协议与内联数据不碰
+    if (/^(https?:|data:|blob:|asset:|file:|mailto:)/i.test(src)) return;
+    // URL 查询/锚点（尺寸调整 ?w=400）与数据路径分开处理，只取路径部分解析
+    const match = /^([^?#]*)([?#].*)?$/.exec(src);
+    if (!match) return;
+    let decoded = match[1];
+    try { decoded = decodeURIComponent(decoded); } catch { /* not encoded; keep as is */ }
+    img.setAttribute("src", convertFileSrc(resolvePath(base, decoded)) + (match[2] ?? ""));
+  });
+}
+
+export const Preview = memo(function Preview({ html, filePath, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument }: Props) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = previewRef || internalRef;
 
@@ -37,6 +61,7 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
     if (!root) return;
 
     applyHeadingIds(root);
+    rewriteImageSources(root, filePath);
 
     // Enable GFM task checkboxes (micromark renders them disabled so raw-HTML
     // checkboxes in the source stay inert) and mark ours for the delegate.
@@ -96,7 +121,7 @@ export const Preview = memo(function Preview({ html, previewRef, onScroll, onTog
       root.removeEventListener("click", onClick);
       root.removeEventListener("change", onCheckboxChange);
     };
-  }, [html, taskLines, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [html, filePath, taskLines, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="preview-pane">

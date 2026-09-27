@@ -92,7 +92,7 @@
 }
 
 .md-viewer mark {
-  background: rgba(255, 214, 10, 0.2);
+  background: var(--selection);
   color: var(--text-primary);
   padding: 0.1em 0.25em;
   border-radius: 2px;

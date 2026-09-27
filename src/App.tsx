@@ -18,6 +18,7 @@ import {
   openFile, saveFile, saveFileAs, confirmDialog, normalizeEol, applyEol, type Eol,
 } from "./services/file";
 import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
+import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
 
@@ -31,25 +32,6 @@ const MARKDOWN_EXTS = ["md", "markdown", "mdown", "mkd", "txt", "text"];
 
 function baseName(path: string): string {
   return path.split(/[/\\]/).pop() || "Untitled";
-}
-
-// Resolve a relative markdown link against the current document's directory.
-// Handles ./ and ../ segments; accepts both POSIX and Windows separators
-// and drive letters — returns an absolute path usable by the fs plugin.
-function resolvePath(base: string, rel: string): string {
-  const relIsAbs = /^[/\\]/.test(rel) || /^[A-Za-z]:[\\/]/.test(rel);
-  const combined = relIsAbs ? rel : base + rel;
-  const parts = combined.split(/[\\/]/);
-  // Windows 盘符（"C:"）保留在结果开头，其余段做 .. / . 归一化
-  const drive = /^[A-Za-z]:$/.test(parts[0]) ? parts.shift() : null;
-  const out: string[] = [];
-  for (const part of parts) {
-    if (!part || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  const joined = out.join("/");
-  return drive ? `${drive}/${joined}` : `/${joined}`;
 }
 
 export default function App() {
@@ -730,7 +712,7 @@ export default function App() {
       if (!isAbsolute) {
         // 剥掉文件名拿到所在目录。Windows 路径用反斜杠，必须同时处理两种分隔符，
         // 否则 base 恒为空、相对链接永远无法解析。
-        const base = docRef.current.path?.replace(/[^/\\]+$/, "") ?? "";
+        const base = baseDirOf(docRef.current.path ?? "");
         if (!base) {
           showToast(t("toast.cannotResolvePath"));
           return;
@@ -843,6 +825,7 @@ export default function App() {
           {(view === "split" || view === "preview") && (
             <Preview
               html={html}
+              filePath={doc.path ?? undefined}
               previewRef={previewRef as React.RefObject<HTMLDivElement>}
               onScroll={onPreviewScroll}
               onToggleTask={toggleTask}

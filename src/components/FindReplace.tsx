@@ -12,44 +12,18 @@ interface FindReplaceButtonProps {
 
 const FindReplaceButton = memo(function FindReplaceButton({
   onClick,
-  disabled,
+  disabled = false,
   title,
   children,
-  bordered,
-  active,
+  bordered = false,
+  active = false,
 }: FindReplaceButtonProps) {
-  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        border: bordered
-          ? "1px solid var(--border, rgba(255,255,255,0.06))"
-          : "none",
-        background: hovered && !disabled
-          ? "var(--accent-muted, rgba(255,255,255,0.08))"
-          : active
-            ? "var(--accent, rgba(255,255,255,0.15))"
-            : "transparent",
-        cursor: !disabled ? "pointer" : "default",
-        padding: bordered ? "4px 8px" : "4px 6px",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: "4px",
-        color: hovered && !disabled
-          ? "var(--text-primary, #fff)"
-          : "var(--text-secondary, rgba(255,255,255,0.7))",
-        fontSize: bordered ? "12px" : "14px",
-        opacity: disabled ? 0.35 : 1,
-        whiteSpace: bordered ? "nowrap" : "normal",
-        lineHeight: 1,
-        transition: "background 0.15s, color 0.15s",
-      }}
+      className={`fr-btn${bordered ? " fr-btn--bordered" : ""}${active ? " fr-btn--active" : ""}`}
     >
       {children}
     </button>
@@ -354,20 +328,6 @@ export const FindReplace = memo(function FindReplace({
 
   return (
     <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 5,
-        background: "var(--bg-floating, #141414)",
-        borderBottom: "1px solid var(--border, rgba(255,255,255,0.06))",
-        padding: "6px 10px",
-        display: "flex",
-        gap: "6px",
-        alignItems: "center",
-        font: "inherit",
-      }}
       className="find-replace-bar"
     >
       {/* Search input */}
@@ -382,31 +342,11 @@ export const FindReplace = memo(function FindReplace({
         autoCapitalize="off"
         autoComplete="off"
         autoCorrect="off"
-        style={{
-          flex: "1 1 auto",
-          minWidth: 0,
-          border: "1px solid var(--border, rgba(255,255,255,0.06))",
-          background: "var(--bg-primary, #000)",
-          color: "var(--text-primary, #fff)",
-          padding: "4px 8px",
-          fontSize: "13px",
-          borderRadius: "4px",
-          outline: "none",
-          fontFamily: "inherit",
-        }}
+        className="find-replace-input"
       />
 
       {/* Match counter */}
-      <span
-        style={{
-          fontSize: "12px",
-          color: "var(--text-muted, rgba(255,255,255,0.3))",
-          minWidth: "40px",
-          textAlign: "center",
-          flexShrink: 0,
-          userSelect: "none",
-        }}
-      >
+      <span className="find-replace-count">
         {counterLabel}
       </span>
 
@@ -426,22 +366,11 @@ export const FindReplace = memo(function FindReplace({
         autoCapitalize="off"
         autoComplete="off"
         autoCorrect="off"
-        style={{
-          flex: "1 1 auto",
-          minWidth: 0,
-          border: "1px solid var(--border, rgba(255,255,255,0.06))",
-          background: "var(--bg-primary, #000)",
-          color: "var(--text-primary, #fff)",
-          padding: "4px 8px",
-          fontSize: "13px",
-          borderRadius: "4px",
-          outline: "none",
-          fontFamily: "inherit",
-        }}
+        className="find-replace-input"
       />
 
       {/* Options */}
-      <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0, fontSize: "11px" }}>
+      <div className="fr-options">
         <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} title={t("find.matchCase")} bordered active={caseSensitive}>
           Aa
         </FindReplaceButton>
@@ -451,14 +380,7 @@ export const FindReplace = memo(function FindReplace({
       </div>
 
       {/* Buttons */}
-      <div
-        style={{
-          display: "flex",
-          gap: "2px",
-          alignItems: "center",
-          flexShrink: 0,
-        }}
-      >
+      <div className="fr-actions">
         {/* Previous */}
         <FindReplaceButton onClick={goPrev} disabled={!hasTerm} title={t("find.prevTitle")}>
           &#9664;
@@ -470,14 +392,7 @@ export const FindReplace = memo(function FindReplace({
         </FindReplaceButton>
 
         {/* Separator */}
-        <div
-          style={{
-            width: "1px",
-            height: "18px",
-            background: "var(--border, rgba(255,255,255,0.06))",
-            flexShrink: 0,
-          }}
-        />
+        <div className="fr-separator" />
 
         {/* Replace */}
         <FindReplaceButton
@@ -504,13 +419,6 @@ export const FindReplace = memo(function FindReplace({
           &times;
         </FindReplaceButton>
       </div>
-
-      {/* Focus ring for inputs */}
-      <style>{`
-        .find-replace-bar input:focus {
-          border-color: var(--border-mid, rgba(255,255,255,0.1)) !important;
-        }
-      `}</style>
     </div>
   );
 });

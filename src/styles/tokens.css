@@ -69,7 +69,7 @@
   --radius-sm: 12px;
   --radius-md: 20px;
   --radius-lg: 28px;
-  --radius-xl: 36px;
+  --radius-pill: 999px;
 
   /* ── Motion ──────────────────────────────────────────────────── */
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
