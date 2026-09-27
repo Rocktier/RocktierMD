@@ -71,6 +71,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Package + upload app.zip to Release
+        run: |
+          APP=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          ditto -c -k --keepParent "$APP" "Rocktier.Markdown.app.zip"
+          for i in {1..10}; do
+            gh release upload ${{ inputs.release_tag || github.ref_name }} "Rocktier.Markdown.app.zip" --clobber && break || sleep 5
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-windows:
     name: Windows x64 (MSI + MSIX)
     needs: checks
