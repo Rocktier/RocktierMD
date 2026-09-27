@@ -389,10 +389,6 @@ export default function App() {
     invoke("build_menu", { lang }).catch(() => {});
   }, [lang]);
 
-  const cycleView = useCallback(() => {
-    setView((v) => (v === "split" ? "editor" : v === "editor" ? "preview" : "split"));
-  }, []);
-
   // PDF export prints the preview pane. If the preview is hidden, mount it
   // first and restore the previous view when printing finishes.
   // 注意：必须走 Tauri 的 print()（IPC → wry 的 printOperationWithPrintInfo，
@@ -756,7 +752,7 @@ export default function App() {
     <div className={`app-shell ${viewClass}`}>
       <Toolbar
         viewMode={view}
-        onToggleView={cycleView}
+        onSelectView={setView}
         onToggleSidebar={() => setSidebar((v) => !v)}
         onNew={doNew}
         onOpen={doOpen}

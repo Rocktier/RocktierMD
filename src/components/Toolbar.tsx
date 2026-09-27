@@ -4,7 +4,8 @@ import { t, useUiLang } from "../i18n";
 
 interface Props {
   viewMode: ViewMode;
-  onToggleView: () => void;
+  /** 分段控件语义：点哪项即切到该态（不再用 disabled 表达"选中"） */
+  onSelectView: (v: ViewMode) => void;
   onToggleSidebar: () => void;
   onNew: () => void;
   onOpen: () => void;
@@ -23,7 +24,7 @@ interface Props {
 
 export const Toolbar = memo(function Toolbar({
   viewMode,
-  onToggleView,
+  onSelectView,
   onToggleSidebar,
   onNew,
   onOpen,
@@ -87,8 +88,8 @@ export const Toolbar = memo(function Toolbar({
         <div className="view-switch">
           <button
             className={`tbar-btn ${viewMode === "editor" ? "active" : ""}`}
-            disabled={viewMode === "editor"}
-            onClick={onToggleView}
+            aria-pressed={viewMode === "editor"}
+            onClick={() => onSelectView("editor")}
             title={t("toolbar.editorOnly")}
             aria-label={t("toolbar.editorOnly")}
           >
@@ -101,8 +102,8 @@ export const Toolbar = memo(function Toolbar({
           </button>
           <button
             className={`tbar-btn ${viewMode === "split" ? "active" : ""}`}
-            disabled={viewMode === "split"}
-            onClick={onToggleView}
+            aria-pressed={viewMode === "split"}
+            onClick={() => onSelectView("split")}
             title={t("toolbar.split")}
             aria-label={t("toolbar.split")}
           >
@@ -113,8 +114,8 @@ export const Toolbar = memo(function Toolbar({
           </button>
           <button
             className={`tbar-btn ${viewMode === "preview" ? "active" : ""}`}
-            disabled={viewMode === "preview"}
-            onClick={onToggleView}
+            aria-pressed={viewMode === "preview"}
+            onClick={() => onSelectView("preview")}
             title={t("toolbar.previewOnly")}
             aria-label={t("toolbar.previewOnly")}
           >

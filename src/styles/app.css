@@ -440,7 +440,7 @@ html.is-mac .toolbar {
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   padding: 0 8px;
 }
 
@@ -688,7 +688,7 @@ html.is-mac .toolbar {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   align-self: start;
 }
 
@@ -715,7 +715,7 @@ html.is-mac .toolbar {
   background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
   border-top: 1px solid var(--border, rgba(255, 255, 255, 0.04));
   font-size: 11px;
-  color: var(--text-muted, rgba(255, 255, 255, 0.35));
+  color: var(--text-tertiary);
   gap: 16px;
   flex-shrink: 0;
   user-select: none;
@@ -735,11 +735,10 @@ html.is-mac .toolbar {
   padding: 0 2px;
   font: inherit;
   font-size: 11px;
-  color: inherit;
+  color: var(--text-tertiary);
   cursor: pointer;
-  opacity: .6;
 }
-.status-lang:hover { opacity: 1; }
+.status-lang:hover { color: var(--text-primary); }
 
 .status-bar .spacer {
   flex: 1;
@@ -794,7 +793,7 @@ html.is-mac .toolbar {
 
 .find-replace-count {
   font-size: 12px;
-  color: var(--text-muted, rgba(255, 255, 255, 0.3));
+  color: var(--text-tertiary);
   min-width: 40px;
   text-align: center;
   flex-shrink: 0;
@@ -854,7 +853,9 @@ html.is-mac .toolbar {
 .fr-btn--active,
 .fr-btn--active:hover:not(:disabled) {
   background: var(--accent, rgba(255, 255, 255, 0.15));
-  color: var(--accent-foreground, #0a0a0a);
+  /* --accent-foreground 全库未定义（浅色主题回落 #0a0a0a = 黑字黑底 1.06:1）；
+     家族单色 accent 的反色就是 --bg-primary，两主题各 21:1 */
+  color: var(--bg-primary, #0a0a0a);
 }
 
 .fr-btn:disabled {
