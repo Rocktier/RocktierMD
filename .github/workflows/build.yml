@@ -59,7 +59,7 @@ jobs:
       - name: Ensure Release Exists
         run: |
           if ! gh release view ${{ inputs.release_tag || github.ref_name }} > /dev/null 2>&1; then
-            gh release create ${{ inputs.release_tag || github.ref_name }} --title ${{ inputs.release_tag || github.ref_name }} --notes "Automated build for ${{ inputs.release_tag || github.ref_name }}"
+            gh release create ${{ inputs.release_tag || github.ref_name }} --draft --title ${{ inputs.release_tag || github.ref_name }} --notes "Automated build for ${{ inputs.release_tag || github.ref_name }}"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,7 +113,7 @@ jobs:
         shell: bash
         run: |
           if ! gh release view ${{ inputs.release_tag || github.ref_name }} > /dev/null 2>&1; then
-            gh release create ${{ inputs.release_tag || github.ref_name }} --title ${{ inputs.release_tag || github.ref_name }} --notes "Automated build for ${{ inputs.release_tag || github.ref_name }}"
+            gh release create ${{ inputs.release_tag || github.ref_name }} --draft --title ${{ inputs.release_tag || github.ref_name }} --notes "Automated build for ${{ inputs.release_tag || github.ref_name }}"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -139,3 +139,43 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 发布闸门：两平台都传完之后，先校验资产清单齐全，再把草稿发布为 latest。
+  # 不齐就保留草稿并让 job 失败 —— 用户永远不会拿到残缺包。
+  publish:
+    name: Verify & Publish Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify assets then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Verifying release $TAG"
+          # 等两平台上传收尾（上传步骤自带重试，这里留一点余量）
+          for i in $(seq 1 12); do
+            assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
+            n=$(printf '%s\n' "$assets" | grep -c . || true)
+            [ "$n" -ge 6 ] && break
+            echo "  waiting for uploads ($n/6)..."
+            sleep 10
+          done
+          # 每个家族产品都应有：dmg / app.zip / msi / nsis exe / msix / msixbundle
+          needed='\.dmg$ \.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+          missing=0
+          for pat in $needed; do
+            if ! printf '%s\n' "$assets" | grep -Eq "$pat"; then
+              echo "::error::release $TAG missing asset matching $pat"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::release $TAG is missing required assets — left as DRAFT for manual review"
+            exit 1
+          fi
+          echo "All required assets present; publishing $TAG"
+          gh release edit "$TAG" --draft=false --latest
