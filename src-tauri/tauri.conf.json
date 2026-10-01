@@ -56,7 +56,7 @@
         "title": "Rocktier Markdown",
         "width": 1200,
         "height": 800,
-        "minWidth": 720,
+        "minWidth": 640,
         "minHeight": 480,
         "center": true,
         "decorations": true,
