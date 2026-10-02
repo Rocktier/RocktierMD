@@ -511,6 +511,14 @@ html.is-mac .toolbar {
   border-color: var(--border-mid);
 }
 
+/* 空大纲占位：区块常驻后无标题时给一行弱化提示 */
+.toc-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
 .shortcuts {
   display: flex;
   flex-direction: column;
@@ -768,10 +776,27 @@ html.is-mac .toolbar {
   background: var(--bg-floating, #141414);
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   padding: 6px 10px;
+  font: inherit;
+}
+
+/* 单行控件区：flex 从 bar 拆到 row，便于禁用态在下方追加一行提示 */
+.find-replace-row {
   display: flex;
   gap: 6px;
   align-items: center;
-  font: inherit;
+  min-width: 0;
+}
+
+/* preview-only：编辑器 textarea 未挂载，查找替换整体禁用 */
+.find-replace-bar--disabled .find-replace-row {
+  opacity: 0.5;
+}
+
+.find-replace-hint {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
 }
 
 .find-replace-input {

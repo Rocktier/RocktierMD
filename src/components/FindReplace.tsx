@@ -35,6 +35,8 @@ interface Props {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   onChange: (newContent: string) => void;
   onClose: () => void;
+  /** preview-only 下编辑器 textarea 未挂载，查找/替换会静默 no-op——整体禁用并提示 */
+  disabled?: boolean;
 }
 
 export const FindReplace = memo(function FindReplace({
@@ -42,6 +44,7 @@ export const FindReplace = memo(function FindReplace({
   textareaRef,
   onChange,
   onClose,
+  disabled = false,
 }: Props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -327,98 +330,103 @@ export const FindReplace = memo(function FindReplace({
   const counterLabel = matchCount > 0 ? `${matchIndex}/${matchCount}` : "0/0";
 
   return (
-    <div
-      className="find-replace-bar"
-    >
-      {/* Search input */}
-      <input
-        ref={searchInputRef}
-        type="text"
-        value={searchTerm}
-        onChange={onSearchChange}
-        onKeyDown={onSearchKeyDown}
-        placeholder={t("find.find")}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        className="find-replace-input"
-      />
+    <div className={`find-replace-bar${disabled ? " find-replace-bar--disabled" : ""}`}>
+      <div className="find-replace-row">
+        {/* Search input */}
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchTerm}
+          onChange={onSearchChange}
+          onKeyDown={onSearchKeyDown}
+          placeholder={t("find.find")}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          className="find-replace-input"
+          disabled={disabled}
+        />
 
-      {/* Match counter */}
-      <span className="find-replace-count">
-        {counterLabel}
-      </span>
+        {/* Match counter */}
+        <span className="find-replace-count">
+          {counterLabel}
+        </span>
 
-      {/* Replace input */}
-      <input
-        type="text"
-        value={replaceText}
-        onChange={(e) => setReplaceText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-        placeholder={t("find.replace")}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        className="find-replace-input"
-      />
+        {/* Replace input */}
+        <input
+          type="text"
+          value={replaceText}
+          onChange={(e) => setReplaceText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onClose();
+            }
+          }}
+          placeholder={t("find.replace")}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          className="find-replace-input"
+          disabled={disabled}
+        />
 
-      {/* Options */}
-      <div className="fr-options">
-        <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} title={t("find.matchCase")} bordered active={caseSensitive}>
-          Aa
-        </FindReplaceButton>
-        <FindReplaceButton onClick={() => setUseRegex((v) => !v)} title={t("find.useRegex")} bordered active={useRegex}>
-          .*
-        </FindReplaceButton>
+        {/* Options */}
+        <div className="fr-options">
+          <FindReplaceButton onClick={() => setCaseSensitive((v) => !v)} disabled={disabled} title={t("find.matchCase")} bordered active={caseSensitive}>
+            Aa
+          </FindReplaceButton>
+          <FindReplaceButton onClick={() => setUseRegex((v) => !v)} disabled={disabled} title={t("find.useRegex")} bordered active={useRegex}>
+            .*
+          </FindReplaceButton>
+        </div>
+
+        {/* Buttons */}
+        <div className="fr-actions">
+          {/* Previous */}
+          <FindReplaceButton onClick={goPrev} disabled={disabled || !hasTerm} title={t("find.prevTitle")}>
+            &#9664;
+          </FindReplaceButton>
+
+          {/* Next */}
+          <FindReplaceButton onClick={goNext} disabled={disabled || !hasTerm} title={t("find.nextTitle")}>
+            &#9654;
+          </FindReplaceButton>
+
+          {/* Separator */}
+          <div className="fr-separator" />
+
+          {/* Replace */}
+          <FindReplaceButton
+            onClick={doReplace}
+            disabled={disabled || !hasTerm || matchCount === 0}
+            title={t("find.replaceTitle")}
+            bordered
+          >
+            {t("find.replace")}
+          </FindReplaceButton>
+
+          {/* Replace All */}
+          <FindReplaceButton
+            onClick={doReplaceAll}
+            disabled={disabled || !hasTerm}
+            title={t("find.replaceAllTitle")}
+            bordered
+          >
+            {t("find.replaceAll")}
+          </FindReplaceButton>
+
+          {/* Close */}
+          <FindReplaceButton onClick={onClose} title={t("find.closeTitle")}>
+            &times;
+          </FindReplaceButton>
+        </div>
       </div>
 
-      {/* Buttons */}
-      <div className="fr-actions">
-        {/* Previous */}
-        <FindReplaceButton onClick={goPrev} disabled={!hasTerm} title={t("find.prevTitle")}>
-          &#9664;
-        </FindReplaceButton>
-
-        {/* Next */}
-        <FindReplaceButton onClick={goNext} disabled={!hasTerm} title={t("find.nextTitle")}>
-          &#9654;
-        </FindReplaceButton>
-
-        {/* Separator */}
-        <div className="fr-separator" />
-
-        {/* Replace */}
-        <FindReplaceButton
-          onClick={doReplace}
-          disabled={!hasTerm || matchCount === 0}
-          title={t("find.replaceTitle")}
-          bordered
-        >
-          {t("find.replace")}
-        </FindReplaceButton>
-
-        {/* Replace All */}
-        <FindReplaceButton
-          onClick={doReplaceAll}
-          disabled={!hasTerm}
-          title={t("find.replaceAllTitle")}
-          bordered
-        >
-          {t("find.replaceAll")}
-        </FindReplaceButton>
-
-        {/* Close */}
-        <FindReplaceButton onClick={onClose} title={t("find.closeTitle")}>
-          &times;
-        </FindReplaceButton>
-      </div>
+      {/* preview-only 禁用态：不再静默失效，明确告知原因与出路（Esc 仍可关闭） */}
+      {disabled && <div className="find-replace-hint">{t("find.needEditorView")}</div>}
     </div>
   );
 });

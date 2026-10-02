@@ -383,6 +383,18 @@ export default function App() {
     showToast(t("toast.newDoc"));
   }, [confirmDiscard, showToast, clearPreviousDrafts]);
 
+  // 查找替换依赖编辑器 textarea（原生 undo 栈），preview-only 下它未挂载，
+  // next/replace 会静默 no-op。所有入口（工具栏按钮 / ⌘F / 原生菜单）统一走这里：
+  // preview-only 时先切回分屏再开面板，保证面板打开时编辑器一定在场。
+  const toggleFindReplace = useCallback(() => {
+    if (findReplaceOpen) {
+      setFindReplaceOpen(false);
+      return;
+    }
+    if (view === "preview") setView("split");
+    setFindReplaceOpen(true);
+  }, [findReplaceOpen, view]);
+
   // 原生菜单跟随 UI 语言重建（macOS 顶栏的 文件/编辑/显示/窗口，本轮问题 2）
   useEffect(() => {
     if (!isTauri) return;
@@ -421,7 +433,7 @@ export default function App() {
           case "open": doOpen(); break;
           case "save": doSave(); break;
           case "save-as": doSaveAs(); break;
-          case "find": setFindReplaceOpen((v) => !v); break;
+          case "find": toggleFindReplace(); break;
           case "export-pdf": doExportPdf(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": toggleTheme(); break;
@@ -437,7 +449,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf]);
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace]);
 
   const shortcuts = useMemo(
     () => ({
@@ -446,10 +458,10 @@ export default function App() {
       onNew: doNew,
       onOpen: doOpen,
       onToggleSidebar: () => setSidebar((v) => !v),
-      onFindReplace: () => setFindReplaceOpen((v) => !v),
+      onFindReplace: toggleFindReplace,
       onExportPdf: doExportPdf,
     }),
-    [doSave, doSaveAs, doNew, doOpen, doExportPdf]
+    [doSave, doSaveAs, doNew, doOpen, doExportPdf, toggleFindReplace]
   );
   useKeyboardShortcuts(shortcuts);
 
@@ -762,7 +774,7 @@ export default function App() {
         words={stats.words}
         minutes={stats.minutes}
         onToggleTheme={toggleTheme}
-        onFindReplace={() => setFindReplaceOpen((v) => !v)}
+        onFindReplace={toggleFindReplace}
         onExportPdf={doExportPdf}
         hasFrontmatter={hasFrontmatter}
         frontmatterOpen={frontmatterOpen}
@@ -816,6 +828,7 @@ export default function App() {
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onChange={onChange}
               onClose={() => setFindReplaceOpen(false)}
+              disabled={view === "preview"}
             />
           )}
           {(view === "split" || view === "preview") && (

@@ -68,19 +68,22 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
             </div>
           )}
 
-          {headings.length > 0 && (
-            <div className="sidebar-section">
-              <div className="sidebar-head">
-                <h3>{t("sidebar.outline")}</h3>
-                <button
-                  className="toc-collapse"
-                  onClick={() => setCollapsed((c) => !c)}
-                  aria-label={collapsed ? t("sidebar.expandToc") : t("sidebar.collapseToc")}
-                >
-                  {collapsed ? "+" : "−"}
-                </button>
-              </div>
-              {!collapsed && (
+          {/* 大纲区块常驻：无标题时给弱化占位，而不是整块消失让布局跳变 */}
+          <div className="sidebar-section">
+            <div className="sidebar-head">
+              <h3>{t("sidebar.outline")}</h3>
+              <button
+                className="toc-collapse"
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label={collapsed ? t("sidebar.expandToc") : t("sidebar.collapseToc")}
+              >
+                {collapsed ? "+" : "−"}
+              </button>
+            </div>
+            {!collapsed && (
+              headings.length === 0 ? (
+                <p className="toc-empty">{t("sidebar.outlineEmpty")}</p>
+              ) : (
                 <>
                   <input
                     type="text"
@@ -108,9 +111,9 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
                     ))}
                   </nav>
                 </>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
 
           <div className="sidebar-section">
             <h3>{t("sidebar.shortcuts")}</h3>

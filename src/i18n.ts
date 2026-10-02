@@ -21,6 +21,7 @@ const STRINGS = {
     "sidebar.expandToc": "展开目录",
     "sidebar.collapseToc": "折叠目录",
     "sidebar.filterHeadings": "筛选标题…",
+    "sidebar.outlineEmpty": "暂无标题——用 # 开始一节",
     "sidebar.shortcuts": "快捷键",
     "sc.new": "新建",
     "sc.open": "打开",
@@ -82,6 +83,7 @@ const STRINGS = {
     "editor.placeholder": "开始编写 Markdown…",
     "find.matchCase": "区分大小写",
     "find.useRegex": "使用正则表达式",
+    "find.needEditorView": "切换到编辑视图以使用查找替换",
   },
   en: {
     "sidebar.files": "Files",
@@ -93,6 +95,7 @@ const STRINGS = {
     "sidebar.expandToc": "Expand TOC",
     "sidebar.collapseToc": "Collapse TOC",
     "sidebar.filterHeadings": "Filter headings...",
+    "sidebar.outlineEmpty": "No headings yet — start a section with #",
     "sidebar.shortcuts": "Shortcuts",
     "sc.new": "New",
     "sc.open": "Open",
@@ -154,6 +157,7 @@ const STRINGS = {
     "editor.placeholder": "Start writing Markdown...",
     "find.matchCase": "Match case",
     "find.useRegex": "Use regex",
+    "find.needEditorView": "Switch to the editor view to use find & replace",
   },
 } as const;
 

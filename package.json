@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build && rm -rf \"$HOME/Downloads/Rocktier Markdown.app\" && cp -R src-tauri/target/release/bundle/macos/*.app \"$HOME/Downloads/\" && cp -f src-tauri/target/release/bundle/dmg/*.dmg \"$HOME/Downloads/\"",
-    "tauri:windows:build": "tauri-windows-bundle build --runner npm"
+    "tauri:windows:build": "tauri-windows-bundle build --runner npm",
+    "family:check": "node scripts/family-check.mjs --self --product markdown"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
