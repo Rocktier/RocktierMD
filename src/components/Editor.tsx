@@ -36,6 +36,8 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
   }, [onChange]);
 
   const onKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 中文等输入法组合输入中：绝不拦截按键，否则选词回车会被吞字（P0-5）
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     const el = e.currentTarget;
     if (e.key === "Tab") {
       e.preventDefault();
