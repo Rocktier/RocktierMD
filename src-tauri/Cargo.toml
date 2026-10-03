@@ -22,6 +22,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # 粘贴图片落盘时解码 base64（tauri 传递依赖里已有同版本，不引入新下载）
 base64 = "0.22"
+# 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
+ed25519-dalek = "2"
 
 [features]
 default = ["custom-protocol"]

@@ -7,6 +7,8 @@ import { Preview } from "./components/Preview";
 import { Sidebar } from "./components/Sidebar";
 import { FindReplace } from "./components/FindReplace";
 import { StatusBar } from "./components/StatusBar";
+import { LicenseDialog } from "./components/LicenseDialog";
+import { licenseStatus, onLicenseExpired, isLicenseExpiredError, type LicenseInfo } from "./services/license";
 import { useTheme, toggleTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -55,6 +57,9 @@ export default function App() {
   const [cursorCol, setCursorCol] = useState(1);
   const [gitBranch, setGitBranch] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
+  // 授权（家族 L6）：状态轮询 + 对话框开关。null = 尚未取到（或浏览器 dev）。
+  const [license, setLicense] = useState<LicenseInfo | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
   const toastRef = useRef(0);
   const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -105,6 +110,38 @@ export default function App() {
     if (toastRef.current) window.clearTimeout(toastRef.current);
     toastRef.current = window.setTimeout(() => setToast(""), 2000);
   }, []);
+
+  // ── License（家族 L6）：读一次试用状态；写操作被拦时由 Rust 发 license-expired
+  //    事件（命令层统一发，界面不用在每个 catch 里各判一次），这里弹激活对话框并
+  //    刷新状态。前端另有兜底：invoke 错误串含 LICENSE_EXPIRED 也开对话框。──
+  const refreshLicense = useCallback(() => {
+    if (!isTauri) return;
+    licenseStatus()
+      .then(setLicense)
+      .catch(() => setLicense(null));
+  }, []);
+
+  const openLicense = useCallback(() => {
+    setLicenseOpen(true);
+    refreshLicense();
+  }, [refreshLicense]);
+
+  useEffect(() => {
+    refreshLicense();
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void onLicenseExpired(() => {
+      setLicenseOpen(true);
+      refreshLicense();
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refreshLicense]);
 
   const onChange = useCallback((content: string) => {
     setDoc((d) => ({ ...d, content, modified: true }));
@@ -350,10 +387,12 @@ export default function App() {
         setDoc((d) => (d.content === content ? { ...d, modified: false } : d));
       }
       showToast(t("toast.saved"));
-    } catch {
-      showToast(t("toast.saveFailed"));
+    } catch (e) {
+      // 事件链已弹对话框（license-expired）；这里兜错误串，防事件丢失时只剩裸失败。
+      if (isLicenseExpiredError(e)) openLicense();
+      else showToast(t("toast.saveFailed"));
     }
-  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY]);
+  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
   const doSaveAs = useCallback(async () => {
     const content = docRef.current.content;
@@ -370,10 +409,11 @@ export default function App() {
         rememberPath(p);
         showToast(t("toast.savedAs"));
       }
-    } catch {
-      showToast(t("toast.saveFailed"));
+    } catch (e) {
+      if (isLicenseExpiredError(e)) openLicense();
+      else showToast(t("toast.saveFailed"));
     }
-  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY]);
+  }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
   const doNew = useCallback(async () => {
     if (!(await confirmDiscard())) return;
@@ -415,11 +455,12 @@ export default function App() {
     await new Promise((r) => setTimeout(r, 150));
     try {
       await invoke("print_doc");
-    } catch {
-      // printing unavailable — stay on current view
+    } catch (e) {
+      // 导出被授权闸门拦下 → 弹激活对话框；其余（打印不可用）维持原样不打断。
+      if (isLicenseExpiredError(e)) openLicense();
     }
     if (wasEditor) setView("editor");
-  }, [view]);
+  }, [view, openLicense]);
 
   // 菜单事件 → 现有动作链（未保存守卫 / toast 都在前端，这里只做转发）
   useEffect(() => {
@@ -437,6 +478,7 @@ export default function App() {
           case "export-pdf": doExportPdf(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": toggleTheme(); break;
+          case "license": openLicense(); break;
           case "website": void invoke('open_url', { url: 'https://rocktier.com/' }).catch(() => {}); break;
           case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.com' }).catch(() => {}); break;
         }
@@ -449,7 +491,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace]);
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace, openLicense]);
 
   const shortcuts = useMemo(
     () => ({
@@ -706,10 +748,13 @@ export default function App() {
       }
       await invoke("save_paste_image", { path: `${dir}assets/${name}`, data: m[2] });
       return `assets/${name}`;
-    } catch {
+    } catch (e) {
+      // 图片落盘被闸门拦下：弹激活对话框；返回 null 交回编辑器走内联 base64 兜底
+      // （不写盘的内容允许留在文档里，但保存会被拦）。
+      if (isLicenseExpiredError(e)) openLicense();
       return null;
     }
-  }, []);
+  }, [openLicense]);
 
   // Click a cross-document link in the preview. Relative paths resolve
   // against the current document's directory.
@@ -844,7 +889,17 @@ export default function App() {
           )}
         </main>
       </div>
-      <StatusBar words={stats.words} line={cursorLine} column={cursorCol} gitBranch={gitBranch} />
+      <StatusBar
+        words={stats.words}
+        line={cursorLine}
+        column={cursorCol}
+        gitBranch={gitBranch}
+        license={license}
+        onLicenseClick={openLicense}
+      />
+      {licenseOpen && (
+        <LicenseDialog info={license} onRefresh={refreshLicense} onClose={() => setLicenseOpen(false)} />
+      )}
       {frontmatterOpen && hasFrontmatter && frontmatterData && (
         <div className="frontmatter-panel" role="complementary" aria-label={t("fm.title")}>
           <div className="fm-header">
