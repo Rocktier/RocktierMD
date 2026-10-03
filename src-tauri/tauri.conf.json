@@ -43,7 +43,26 @@
     "copyright": "Copyright 2026 Rocktier",
     "category": "Productivity",
     "shortDescription": "Fast, elegant Markdown reader",
-    "longDescription": "Rocktier Markdown - A fast, elegant, private Markdown reader. Part of the Rocktier family of creative tools."
+    "longDescription": "Rocktier Markdown - A fast, elegant, private Markdown reader. Part of the Rocktier family of creative tools.",
+    "windows": {
+      "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "FEB0168A-F3CA-5F88-BC76-7B105AEC11C0"
+      }
+    }
   },
   "productName": "Rocktier Markdown",
   "mainBinaryName": "RocktierMarkdown",
