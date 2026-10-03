@@ -9,7 +9,7 @@ import { FindReplace } from "./components/FindReplace";
 import { StatusBar } from "./components/StatusBar";
 import { LicenseDialog } from "./components/LicenseDialog";
 import { licenseStatus, onLicenseExpired, isLicenseExpiredError, type LicenseInfo } from "./services/license";
-import { useTheme, toggleTheme } from "./hooks/useTheme";
+import { useTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import {
@@ -37,7 +37,7 @@ function baseName(path: string): string {
 }
 
 export default function App() {
-  useTheme();
+  const { mode: themeMode, cycleTheme } = useTheme();
   // 订阅语言变化：App 内的 t()（toast、frontmatter 面板、确认弹窗）
   // 在切换语言后立即重渲染，避免半新半旧（复审 F9）。
   const lang = useUiLang();
@@ -477,7 +477,7 @@ export default function App() {
           case "find": toggleFindReplace(); break;
           case "export-pdf": doExportPdf(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
-          case "toggle-theme": toggleTheme(); break;
+          case "toggle-theme": cycleTheme(); break;
           case "license": openLicense(); break;
           case "website": void invoke('open_url', { url: 'https://rocktier.com/' }).catch(() => {}); break;
           case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.com' }).catch(() => {}); break;
@@ -818,7 +818,8 @@ export default function App() {
         displayName={displayName}
         words={stats.words}
         minutes={stats.minutes}
-        onToggleTheme={toggleTheme}
+        themeMode={themeMode}
+        onToggleTheme={cycleTheme}
         onFindReplace={toggleFindReplace}
         onExportPdf={doExportPdf}
         hasFrontmatter={hasFrontmatter}
