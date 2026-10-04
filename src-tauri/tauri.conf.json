@@ -66,7 +66,7 @@
   },
   "productName": "Rocktier Markdown",
   "mainBinaryName": "RocktierMarkdown",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "identifier": "Rocktier.RocktierMarkdown",
   "app": {
     "windows": [
