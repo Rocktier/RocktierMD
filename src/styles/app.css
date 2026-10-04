@@ -310,7 +310,6 @@ html.is-mac .toolbar {
   padding: 40px 48px;
   background: transparent;
   border: none;
-  outline: none;
   resize: none;
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -475,7 +474,6 @@ html.is-mac .toolbar {
   color: var(--text-secondary);
   font-size: 12px;
   padding: 5px 10px;
-  outline: none;
 }
 
 .toc-filter:focus {
@@ -794,7 +792,6 @@ html.is-mac .toolbar {
   padding: 4px 8px;
   font-size: 13px;
   border-radius: 4px;
-  outline: none;
   font-family: inherit;
 }
 
@@ -964,7 +961,6 @@ html.is-mac .toolbar {
   border-radius: var(--radius-sm, 6px);
   font: inherit;
   color: var(--text-primary);
-  outline: none;
 }
 .license-field input:focus { border-color: var(--accent-brand, var(--accent)); }
 
