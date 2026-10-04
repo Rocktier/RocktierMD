@@ -4,7 +4,10 @@ import { useEffect, useReducer } from "react";
 
 type Lang = "zh" | "en";
 
-const STORE_KEY = "rocktier-md-lang";
+/* 2026-10-04 键改名（"rocktier-md-lang" → "rocktier.lang"），读取处回落旧键，
+ * 理由同 App.tsx。语言是用户感知最强的偏好，重置一次就等于「中文用户变英文界面」。 */
+const STORE_KEY = "rocktier.lang";
+const STORE_KEY_LEGACY = "rocktier-md-lang";
 
 /** ⌘ on macOS, Ctrl+ elsewhere — the shortcut hints are written with ⌘ in the dictionary. */
 const MOD_KEY =
@@ -218,7 +221,7 @@ export type UiKey = keyof typeof STRINGS.zh;
 
 function detectLang(): Lang {
   try {
-    const saved = localStorage.getItem(STORE_KEY);
+    const saved = localStorage.getItem(STORE_KEY) ?? localStorage.getItem(STORE_KEY_LEGACY);
     if (saved === "zh" || saved === "en") return saved;
   } catch {
     // storage unavailable

@@ -24,8 +24,12 @@ import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
 
-const LAST_PATH_KEY = "rocktier-md-last-path";
-const RECENT_KEY = "rocktier-md-recent";
+/* 2026-10-04 键改名：家族命名空间统一用「.」，此前 MD 用的是 "rocktier-md-…"（连字符）。
+ * 改名只为跨产品一致，不该顺手清掉用户已选的偏好 —— 所以读取处仍回落旧键。旧键不删。 */
+// 只写键（仅 setItem/removeItem，无读取点）—— 改名无需迁移数据，故不留 legacy 常量。
+const LAST_PATH_KEY = "rocktier.last-path";
+const RECENT_KEY = "rocktier.md.recent";
+const RECENT_KEY_LEGACY = "rocktier-md-recent";
 const RECENT_MAX = 5;
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -191,7 +195,9 @@ export default function App() {
       if (path) {
         localStorage.setItem(LAST_PATH_KEY, path);
         // 最近打开列表（本轮 U1）：去重、最新在前、封顶 5 条
-        const list: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+        const list: string[] = JSON.parse(
+            (localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY)) || "[]",
+          );
         const next = [path, ...list.filter((p) => p !== path)].slice(0, RECENT_MAX);
         localStorage.setItem(RECENT_KEY, JSON.stringify(next));
         setRecent(next);
@@ -206,7 +212,7 @@ export default function App() {
   // Load recent list on mount
   useEffect(() => {
     try {
-      setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"));
+      setRecent(JSON.parse((localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY)) || "[]"));
     } catch {
       // corrupted entry — start empty
     }
