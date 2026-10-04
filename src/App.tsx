@@ -20,6 +20,9 @@ import {
   openFile, saveFile, saveFileAs, confirmDialog, normalizeEol, applyEol, type Eol,
 } from "./services/file";
 import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
+
+/** toast 语气。error 必须同时改变配色、存活时长与 aria role（家族铁律 7）。 */
+type ToastTone = "info" | "success" | "error";
 import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
@@ -54,7 +57,7 @@ export default function App() {
 
   const [view, setView] = useState<ViewMode>("split");
   const [sidebar, setSidebar] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ msg: string; tone: ToastTone } | null>(null);
   const [frontmatterOpen, setFrontmatterOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [cursorLine, setCursorLine] = useState(1);
@@ -109,10 +112,15 @@ export default function App() {
   const frontmatterData = useMemo<Frontmatter | null>(() =>
     parsed.frontmatter ? parseFrontmatter(parsed.frontmatter) : null, [parsed.frontmatter]);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
+  /*toast 分三种语气。此前成功与失败共用一个 .toast class、2 秒消失，
+    「已保存」和「保存失败：无法写入文件」长得一模一样 —— 用户会以为文件存好了。
+    这是数据层面的误导，优先级高于任何视觉问题（家族铁律 7）。
+    失败还必须活得更久：错误提示消失得比成功快，是最常见的反模式。 */
+  const showToast = useCallback((msg: string, tone: ToastTone = "info") => {
+    setToast({ msg, tone });
     if (toastRef.current) window.clearTimeout(toastRef.current);
-    toastRef.current = window.setTimeout(() => setToast(""), 2000);
+    const ttl = tone === "error" ? 6000 : 2000;
+    toastRef.current = window.setTimeout(() => setToast(null), ttl);
   }, []);
 
   // ── License（家族 L6）：读一次试用状态；写操作被拦时由 Rust 发 license-expired
@@ -365,7 +373,7 @@ export default function App() {
       lastPathRef.current = r.path;
       setDoc({ path: r.path, content: r.content, modified: false });
       rememberPath(r.path);
-      showToast(t("toast.fileOpened"));
+      showToast(t("toast.fileOpened"), "success");
     }
   }, [confirmDiscard, showToast, rememberPath, clearPreviousDrafts]);
 
@@ -392,11 +400,11 @@ export default function App() {
         // 等待写盘期间用户可能又输入了：只有内容未变才敢标记为已保存
         setDoc((d) => (d.content === content ? { ...d, modified: false } : d));
       }
-      showToast(t("toast.saved"));
+      showToast(t("toast.saved"), "success");
     } catch (e) {
       // 事件链已弹对话框（license-expired）；这里兜错误串，防事件丢失时只剩裸失败。
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"));
+      else showToast(t("toast.saveFailed"), "error");
     }
   }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
@@ -413,11 +421,11 @@ export default function App() {
         clearRecovery(docRef.current.path);
         setDoc((d) => (d.content === content ? { ...d, path: p, modified: false } : { ...d, path: p }));
         rememberPath(p);
-        showToast(t("toast.savedAs"));
+        showToast(t("toast.savedAs"), "success");
       }
     } catch (e) {
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"));
+      else showToast(t("toast.saveFailed"), "error");
     }
   }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
@@ -426,7 +434,7 @@ export default function App() {
     clearPreviousDrafts();
     eolRef.current = "\n";
     setDoc({ path: null, content: "", modified: false });
-    showToast(t("toast.newDoc"));
+    showToast(t("toast.newDoc"), "success");
   }, [confirmDiscard, showToast, clearPreviousDrafts]);
 
   // 查找替换依赖编辑器 textarea（原生 undo 栈），preview-only 下它未挂载，
@@ -522,13 +530,13 @@ export default function App() {
   const openMarkdownPath = useCallback(async (path: string): Promise<boolean> => {
     const ext = path.split(".").pop()?.toLowerCase();
     if (!ext || !MARKDOWN_EXTS.includes(ext)) {
-      showToast(t("toast.unsupportedType"));
+      showToast(t("toast.unsupportedType"), "error");
       return false;
     }
     if (!(await confirmDiscard())) return false;
     try {
       if (!(await exists(path))) {
-        showToast(t("toast.fileNotExists"));
+        showToast(t("toast.fileNotExists"), "error");
         return false;
       }
       const { content, eol } = normalizeEol(await readTextFile(path));
@@ -538,10 +546,10 @@ export default function App() {
       lastPathRef.current = path;
       setDoc({ path, content, modified: false });
       rememberPath(path);
-      showToast(t("toast.fileOpened"));
+      showToast(t("toast.fileOpened"), "success");
       return true;
     } catch {
-      showToast(t("toast.cannotReadFile"));
+      showToast(t("toast.cannotReadFile"), "error");
       return false;
     }
   }, [confirmDiscard, rememberPath, showToast, clearPreviousDrafts]);
@@ -553,7 +561,7 @@ export default function App() {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!ext || !MARKDOWN_EXTS.includes(ext)) {
-      showToast(t("toast.unsupportedType"));
+      showToast(t("toast.unsupportedType"), "error");
       return;
     }
     if (!(await confirmDiscard())) return;
@@ -562,9 +570,9 @@ export default function App() {
       eolRef.current = eol;
       setDoc({ path: (file as any).path ?? null, content, modified: false });
       if ((file as any).path) rememberPath((file as any).path);
-      showToast(t("toast.fileOpened"));
+      showToast(t("toast.fileOpened"), "success");
     } catch {
-      showToast(t("toast.cannotReadFile"));
+      showToast(t("toast.cannotReadFile"), "error");
     }
   }, [confirmDiscard, rememberPath, showToast]);
 
@@ -674,7 +682,7 @@ export default function App() {
         eolRef.current = eol;
         setDoc({ path, content: diskContent, modified: false });
         lastSavedContentRef.current = diskContent;
-        showToast(t("toast.reloaded"));
+        showToast(t("toast.reloaded"), "success");
       } else {
         lastSavedContentRef.current = diskContent; // user dismissed — don't ask again
       }
@@ -773,7 +781,7 @@ export default function App() {
         // 否则 base 恒为空、相对链接永远无法解析。
         const base = baseDirOf(docRef.current.path ?? "");
         if (!base) {
-          showToast(t("toast.cannotResolvePath"));
+          showToast(t("toast.cannotResolvePath"), "error");
           return;
         }
         target = resolvePath(base, target);
@@ -869,7 +877,7 @@ export default function App() {
               onChange={onChange}
               textareaRef={editorRef as React.RefObject<HTMLTextAreaElement>}
               onScroll={onEditorScroll}
-              onImagePaste={() => showToast(t("toast.imageInserted"))}
+              onImagePaste={() => showToast(t("toast.imageInserted"), "success")}
               saveImagePaste={saveImagePaste}
               onCursorMove={onCursorMove}
             />
@@ -925,7 +933,14 @@ export default function App() {
           </dl>
         </div>
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <div
+          className={toast.tone === "info" ? "toast" : `toast toast--${toast.tone}`}
+          role={toast.tone === "error" ? "alert" : "status"}
+        >
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }
