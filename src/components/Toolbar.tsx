@@ -55,6 +55,7 @@ export const Toolbar = memo(function Toolbar({
         <div className="brand">
           <img className="brand-mark" src="/favicon.png" alt="" />
           <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
+          <span className="dot-live" aria-hidden="true" />
         </div>
         <div className={`doc-pill ${modified ? "modified" : ""}`} title={modified ? t("toolbar.unsaved") : undefined}>
           {modified && <span className="dot" />}
