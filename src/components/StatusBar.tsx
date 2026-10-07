@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { t, useUiLang, getUiLang, setUiLang } from "../i18n";
+import { LOCALES, t, useUiLang, getUiLang, setUiLang, type UiLang } from "../i18n";
 import type { LicenseInfo } from "../services/license";
 
 interface Props {
@@ -45,14 +45,20 @@ export const StatusBar = memo(function StatusBar({ words, line, column, gitBranc
         </button>
       )}
       <span className="sep" />
-      <button
-        type="button"
+      {/* 家族标准 8 门语言。原为 en/zh 二选一按钮 —— 6 门接入后没法用。
+          用原生 select：8 个选项不需要搜索，跨平台行为一致，
+          键盘与读屏器支持免费获得。选项显示 endonym（语言自称）。 */}
+      <select
         className="status-lang"
-        onClick={() => setUiLang(getUiLang() === "zh" ? "en" : "zh")}
-        title={getUiLang() === "zh" ? "Switch to English" : "切换为中文"}
+        value={getUiLang()}
+        onChange={(e) => setUiLang(e.target.value as UiLang)}
+        aria-label="Language"
+        title="Language"
       >
-        {getUiLang() === "zh" ? "EN" : "中文"}
-      </button>
+        {LOCALES.map((l) => (
+          <option key={l.code} value={l.code}>{l.endonym}</option>
+        ))}
+      </select>
     </footer>
   );
 });

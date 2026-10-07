@@ -1,8 +1,27 @@
+import { en } from "./i18n.en";
+import { ja } from "./i18n.ja";
+import { ko } from "./i18n.ko";
+import { de } from "./i18n.de";
+import { es } from "./i18n.es";
+import { pt } from "./i18n.pt";
+import { ar } from "./i18n.ar";
 // UI 文案统一走这里：此前工具栏是中文、侧栏/查找栏是英文、toast 中英混杂。
 // 默认跟随系统语言（zh/en），选择持久化到 localStorage。
 import { useEffect, useReducer } from "react";
 
-type Lang = "zh" | "en";
+/* 家族标准语言表 —— 单一真源，与 PDF / CAD / Sign / Compressor 同构。 */
+export const LOCALES = [
+  { code: "en", endonym: "English" },
+  { code: "zh", endonym: "中文" },
+  { code: "ja", endonym: "日本語" },
+  { code: "ko", endonym: "한국어" },
+  { code: "de", endonym: "Deutsch" },
+  { code: "es", endonym: "Español" },
+  { code: "pt", endonym: "Português" },
+  { code: "ar", endonym: "العربية" },
+] as const;
+
+export type Lang = (typeof LOCALES)[number]["code"];
 
 /* 2026-10-04 键改名（"rocktier-md-lang" → "rocktier.lang"），读取处回落旧键，
  * 理由同 App.tsx。语言是用户感知最强的偏好，重置一次就等于「中文用户变英文界面」。 */
@@ -14,6 +33,7 @@ const MOD_KEY =
   typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl+";
 
 const STRINGS = {
+  en, ja, ko, de, es, pt, ar,
   zh: {
     "sidebar.files": "文件",
     "sidebar.recent": "最近打开",
@@ -114,107 +134,10 @@ const STRINGS = {
     "license.whereToFind": "付款后页面上会显示激活码，购买确认邮件里也有一份。",
     "license.privacyNote": "激活会把激活码发送到 rocktier.com 一次，并把签名回执保存在本机。除此之外不传输任何内容。",
   },
-  en: {
-    "sidebar.files": "Files",
-    "sidebar.recent": "Recent",
-    "sidebar.close": "Close",
-    "sidebar.actions": "Actions",
-    "sidebar.openFile": "Open File",
-    "sidebar.outline": "Outline",
-    "sidebar.expandToc": "Expand TOC",
-    "sidebar.collapseToc": "Collapse TOC",
-    "sidebar.filterHeadings": "Filter headings...",
-    "sidebar.outlineEmpty": "No headings yet — start a section with #",
-    "sidebar.shortcuts": "Shortcuts",
-    "sc.new": "New",
-    "sc.open": "Open",
-    "sc.save": "Save",
-    "sc.saveAs": "Save as",
-    "sc.find": "Find",
-    "sc.exportPdf": "Export PDF",
-    "sc.sidebar": "Sidebar",
-    "sc.indent": "Indent",
-    "toolbar.toggleSidebar": "Sidebar (\\)",
-    "toolbar.editorOnly": "Editor only",
-    "toolbar.split": "Split",
-    "toolbar.previewOnly": "Preview only",
-    "toolbar.statAria": "{n} words / {m} min read",
-    "toolbar.statTitle": "{n} words",
-    "toolbar.new": "New (⌘N)",
-    "toolbar.open": "Open (⌘O)",
-    "toolbar.save": "Save (⌘S)",
-    "toolbar.find": "Find & Replace (⌘F)",
-    "toolbar.exportPdf": "Export PDF (⌘⇧P)",
-    "toolbar.info": "Document info",
-    "toolbar.theme": "Toggle theme",
-    "theme.mode.auto": "Follow system",
-    "theme.mode.light": "Light",
-    "theme.mode.dark": "Dark",
-    "toolbar.unsaved": "Unsaved changes",
-    "find.find": "Find",
-    "find.replace": "Replace",
-    "find.replaceAll": "All",
-    "find.prevTitle": "Previous match (Shift+Enter)",
-    "find.nextTitle": "Next match (Enter)",
-    "find.replaceTitle": "Replace current match",
-    "find.replaceAllTitle": "Replace all (undoable)",
-    "find.closeTitle": "Close (Esc)",
-    "toast.fileOpened": "File opened",
-    "toast.saved": "Saved",
-    "toast.savedAs": "Saved as new file",
-    "toast.newDoc": "New document",
-    "toast.saveFailed": "Save failed: unable to write file",
-    "toast.unsupportedType": "Unsupported file type",
-    "toast.cannotReadFile": "Unable to read file",
-    "toast.cannotResolvePath": "Cannot resolve relative path",
-    "toast.fileNotExists": "File not found",
-    "toast.cannotOpenFile": "Unable to open file",
-    "toast.imageInserted": "Image inserted",
-    "toast.reloaded": "Reloaded",
-    "confirm.discard": "This document has unsaved changes. Discard them?",
-    "confirm.externalChange": "The file was changed externally. Reload it? Unsaved changes will be lost.",
-    "confirm.recover": "An unsaved draft was found. Restore it?",
-    "confirm.recoverUntitled": "An unsaved new document was found. Restore it?",
-    "confirm.recoverNamedNewer": "An unsaved draft for \"{name}\" was found and it is newer than the file on disk. Restore it?",
-    "confirm.recoverNamedOlder": "An unsaved draft for \"{name}\" was found, but it is older than the file on disk. Restoring it would overwrite newer content. Restore anyway?",
-    "confirm.recoverNamedCount": "({n} unsaved draft(s) in total.)",
-    "doc.untitled": "Untitled",
-    "status.words": "{n} words",
-    "status.lineCol": "Ln {line}, Col {col}",
-    "fm.title": "Document info",
-    "fm.titleLabel": "Title",
-    "fm.author": "Author",
-    "fm.date": "Date",
-    "fm.close": "Close",
-    "editor.placeholder": "Start writing Markdown...",
-    "find.matchCase": "Match case",
-    "find.useRegex": "Use regex",
-    "find.needEditorView": "Switch to the editor view to use find & replace",
-    "license.title": "License",
-    "license.loading": "Checking…",
-    "license.trialLeft": "Free trial — {days} day(s) left.",
-    "license.trialChip": "Trial · {days}d",
-    "license.expiredChip": "Not activated",
-    "license.expired": "Your trial has ended. Reading and previewing still work; saving and exporting need a license.",
-    "license.licensed": "Licensed. Thank you.",
-    "license.licensedFamily": "Licensed — family bundle. Every Rocktier app is unlocked.",
-    "license.licensedNote": "This copy is activated. No further checks, and no network access.",
-    "license.storeNote": "This copy came from the Microsoft Store, so the Store handles the license for it.",
-    "license.notConfigured": "This build cannot activate a code yet — it carries no verification key. Please write to hello@rocktier.com.",
-    "license.codeLabel": "Activation code",
-    "license.codePlaceholder": "RKT-…",
-    "license.activate": "Activate",
-    "license.activating": "Activating…",
-    "license.buy": "Buy — $6.99",
-    "license.close": "Close",
-    "license.invalid": "That code was not accepted. Check it for a typo — the code is not case-sensitive.",
-    "license.wrongProduct": "That code belongs to a different Rocktier app. Each app has its own code — or the family bundle, which unlocks all of them.",
-    "license.refunded": "That code was refunded, so it no longer unlocks anything. If this is a mistake, write to hello@rocktier.com with your order number.",
-    "license.offline": "Could not reach rocktier.com. Activating needs one connection; after that the app stays offline.",
-    "license.whereToFind": "Your code was shown on the page right after payment, and is in the purchase email too.",
-    "license.privacyNote": "Activating sends the code to rocktier.com once and stores the signed reply locally. Nothing else is sent.",
-  },
 } as const;
+
+/** 键结构取自英文 —— 译文文件用这个类型做第二道保险（tsc 会校验）。 */
+export type { Strings } from "./i18n.en";
 
 export type UiLang = Lang;
 export type UiKey = keyof typeof STRINGS.zh;
@@ -272,3 +195,6 @@ export function useUiLang(): Lang {
   }, [force]);
   return currentLang;
 }
+
+// 供 scripts/gen-i18n.mjs 取真实键结构（esbuild 求值，不用正则猜 TS）
+export const __en = en;

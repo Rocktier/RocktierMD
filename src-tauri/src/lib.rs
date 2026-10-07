@@ -424,23 +424,22 @@ fn clear_recovery(app: tauri::AppHandle, path: String) -> Result<(), String> {
 /// 自定义项的点击经 on_menu_event 转成 "menu-action" 事件发给前端；
 /// 预定义项（撤销/拷贝/粘贴/最小化等）由系统自动本地化并自带快捷键。
 fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
-    let zh = lang.starts_with("zh");
-    let l = |zhv: &'static str, en: &'static str| if zh { zhv } else { en };
+    let m = MenuStrings::for_lang(&lang);
 
-    let new_i = MenuItem::with_id(app, "new", l("新建", "New"), true, Some("CmdOrCtrl+N"))?;
-    let open_i = MenuItem::with_id(app, "open", l("打开…", "Open…"), true, Some("CmdOrCtrl+O"))?;
-    let save_i = MenuItem::with_id(app, "save", l("保存", "Save"), true, Some("CmdOrCtrl+S"))?;
+    let new_i = MenuItem::with_id(app, "new", m.new, true, Some("CmdOrCtrl+N"))?;
+    let open_i = MenuItem::with_id(app, "open", m.open, true, Some("CmdOrCtrl+O"))?;
+    let save_i = MenuItem::with_id(app, "save", m.save, true, Some("CmdOrCtrl+S"))?;
     let save_as_i = MenuItem::with_id(
         app,
         "save-as",
-        l("另存为…", "Save As…"),
+        m.save_as,
         true,
         Some("CmdOrCtrl+Shift+S"),
     )?;
     let export_i = MenuItem::with_id(
         app,
         "export-pdf",
-        l("导出 PDF…", "Export PDF…"),
+        m.export_pdf,
         true,
         Some("CmdOrCtrl+Shift+P"),
     )?;
@@ -452,7 +451,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         &[
             &PredefinedMenuItem::about(
                 app,
-                Some(l("关于 Rocktier Markdown", "About Rocktier Markdown")),
+                Some(m.about),
                                 Some(AboutMetadata {
                     version: Some(env!("CARGO_PKG_VERSION").to_string()),
                     copyright: Some("Copyright 2026 Rocktier".to_string()),
@@ -463,13 +462,13 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             &PredefinedMenuItem::hide(app, None)?,
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, "quit", l("退出", "Quit"), true, Some("CmdOrCtrl+Q"))?,
+            &MenuItem::with_id(app, "quit", m.quit, true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
 
     let file_menu = Submenu::with_items(
         app,
-        l("文件", "File"),
+        m.file,
         true,
         &[
             &new_i,
@@ -486,7 +485,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
 
     let edit_menu = Submenu::with_items(
         app,
-        l("编辑", "Edit"),
+        m.edit,
         true,
         &[
             &PredefinedMenuItem::undo(app, None)?,
@@ -502,22 +501,22 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     let sidebar_i = MenuItem::with_id(
         app,
         "toggle-sidebar",
-        l("切换侧栏", "Toggle Sidebar"),
+        m.toggle_sidebar,
         true,
         Some("CmdOrCtrl+\\"),
     )?;
-    let theme_i = MenuItem::with_id(app, "toggle-theme", l("切换日夜模式", "Toggle Theme"), true, None::<&str>)?;
-    let find_i = MenuItem::with_id(app, "find", l("查找替换", "Find & Replace"), true, Some("CmdOrCtrl+F"))?;
+    let theme_i = MenuItem::with_id(app, "toggle-theme", m.toggle_theme, true, None::<&str>)?;
+    let find_i = MenuItem::with_id(app, "find", m.find, true, Some("CmdOrCtrl+F"))?;
     let view_menu = Submenu::with_items(
         app,
-        l("显示", "View"),
+        m.view,
         true,
         &[&sidebar_i, &theme_i, &find_i],
     )?;
 
     let window_menu = Submenu::with_items(
         app,
-        l("窗口", "Window"),
+        m.window,
         true,
         &[
             &PredefinedMenuItem::minimize(app, None)?,
@@ -526,12 +525,12 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         ],
     )?;
 
-    let site_i = MenuItem::with_id(app, "website", l("官方网站", "Website"), true, None::<&str>)?;
-    let mail_i = MenuItem::with_id(app, "feedback", l("反馈", "Feedback"), true, None::<&str>)?;
+    let site_i = MenuItem::with_id(app, "website", m.website, true, None::<&str>)?;
+    let mail_i = MenuItem::with_id(app, "feedback", m.feedback, true, None::<&str>)?;
     // 购买页面上写着"打开应用 → License → 输入激活码"，所以应用里必须真有一个能到
     // 那儿的入口（授权胶囊在已激活/商店版下会隐藏，帮助菜单是常驻入口）。
-    let license_i = MenuItem::with_id(app, "license", l("许可与激活…", "License…"), true, None::<&str>)?;
-    let help_menu = Submenu::with_items(app, l("帮助", "Help"), true, &[&license_i, &site_i, &mail_i])?;
+    let license_i = MenuItem::with_id(app, "license", m.license, true, None::<&str>)?;
+    let help_menu = Submenu::with_items(app, m.help, true, &[&license_i, &site_i, &mail_i])?;
 
     let menu = Menu::with_items(
         app,
@@ -543,6 +542,111 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
 
 /// 前端挂载后（以及语言切换时）调用，按 UI 语言（"zh" / "en"）构建菜单。
 #[tauri::command]
+/// Menu labels for one language.
+///
+/// Same approach as PDF's, CAD's and Sign's menus: a struct per language
+/// instead of widening the old `l(zh, en)` closure to eight arguments — with
+/// eight positional string arguments, swapping `ja` and `ko` compiles cleanly
+/// and silently shows the wrong language. One field per call site makes that a
+/// compile error.
+///
+/// Unknown codes fall back to English rather than panicking, so a stale
+/// `localStorage` value degrades to a usable menu.
+struct MenuStrings {
+    new: &'static str,
+    open: &'static str,
+    save: &'static str,
+    save_as: &'static str,
+    export_pdf: &'static str,
+    file: &'static str,
+    edit: &'static str,
+    find: &'static str,
+    view: &'static str,
+    toggle_sidebar: &'static str,
+    toggle_theme: &'static str,
+    window: &'static str,
+    help: &'static str,
+    website: &'static str,
+    feedback: &'static str,
+    about: &'static str,
+    license: &'static str,
+    quit: &'static str,
+}
+
+impl MenuStrings {
+    fn for_lang(lang: &str) -> Self {
+        // Primary subtag, so "zh-CN" and "zh-Hans" both land on zh.
+        let code = lang.split(['-', '_']).next().unwrap_or("");
+        match code {
+            "zh" => Self {
+                new: "新建", open: "打开…", save: "保存", save_as: "另存为…",
+                export_pdf: "导出 PDF…", file: "文件", edit: "编辑",
+                find: "查找替换", view: "显示", toggle_sidebar: "切换侧栏",
+                toggle_theme: "切换日夜模式", window: "窗口", help: "帮助",
+                website: "官方网站", feedback: "反馈",
+                about: "关于 Rocktier Markdown", license: "许可与激活…", quit: "退出",
+            },
+            "ja" => Self {
+                new: "新規", open: "開く…", save: "保存", save_as: "名前を付けて保存…",
+                export_pdf: "PDF を書き出し…", file: "ファイル", edit: "編集",
+                find: "検索・置換", view: "表示", toggle_sidebar: "サイドバーの切り替え",
+                toggle_theme: "テーマを切り替え", window: "ウインドウ", help: "ヘルプ",
+                website: "公式サイト", feedback: "フィードバック",
+                about: "Rocktier Markdown について", license: "ライセンス…", quit: "終了",
+            },
+            "ko" => Self {
+                new: "새로 만들기", open: "열기…", save: "저장", save_as: "다른 이름으로 저장…",
+                export_pdf: "PDF 내보내기…", file: "파일", edit: "편집",
+                find: "찾기 및 바꾸기", view: "보기", toggle_sidebar: "사이드바 전환",
+                toggle_theme: "테마 전환", window: "창", help: "도움말",
+                website: "공식 웹사이트", feedback: "피드백",
+                about: "Rocktier Markdown 정보", license: "라이선스…", quit: "종료",
+            },
+            "de" => Self {
+                new: "Neu", open: "Öffnen…", save: "Speichern", save_as: "Speichern unter…",
+                export_pdf: "Als PDF exportieren…", file: "Datei", edit: "Bearbeiten",
+                find: "Suchen & Ersetzen", view: "Ansicht", toggle_sidebar: "Seitenleiste umschalten",
+                toggle_theme: "Design wechseln", window: "Fenster", help: "Hilfe",
+                website: "Website", feedback: "Feedback",
+                about: "Über Rocktier Markdown", license: "Lizenz…", quit: "Beenden",
+            },
+            "es" => Self {
+                new: "Nuevo", open: "Abrir…", save: "Guardar", save_as: "Guardar como…",
+                export_pdf: "Exportar a PDF…", file: "Archivo", edit: "Editar",
+                find: "Buscar y reemplazar", view: "Ver", toggle_sidebar: "Alternar barra lateral",
+                toggle_theme: "Cambiar tema", window: "Ventana", help: "Ayuda",
+                website: "Sitio web", feedback: "Comentarios",
+                about: "Acerca de Rocktier Markdown", license: "Licencia…", quit: "Salir",
+            },
+            "pt" => Self {
+                new: "Novo", open: "Abrir…", save: "Salvar", save_as: "Salvar como…",
+                export_pdf: "Exportar para PDF…", file: "Arquivo", edit: "Editar",
+                find: "Localizar e substituir", view: "Exibir", toggle_sidebar: "Alternar barra lateral",
+                toggle_theme: "Alternar tema", window: "Janela", help: "Ajuda",
+                website: "Site", feedback: "Comentários",
+                about: "Sobre o Rocktier Markdown", license: "Licença…", quit: "Sair",
+            },
+            "ar" => Self {
+                new: "جديد", open: "فتح…", save: "حفظ", save_as: "حفظ باسم…",
+                export_pdf: "تصدير PDF…", file: "ملف", edit: "تحرير",
+                find: "بحث واستبدال", view: "عرض", toggle_sidebar: "تبديل الشريط الجانبي",
+                toggle_theme: "تبديل المظهر", window: "نافذة", help: "مساعدة",
+                website: "الموقع", feedback: "ملاحظات",
+                about: "حول Rocktier Markdown", license: "الترخيص…", quit: "إنهاء",
+            },
+            // English is both the family default and the fallback.
+            _ => Self {
+                new: "New", open: "Open…", save: "Save", save_as: "Save As…",
+                export_pdf: "Export PDF…", file: "File", edit: "Edit",
+                find: "Find & Replace", view: "View", toggle_sidebar: "Toggle Sidebar",
+                toggle_theme: "Toggle Theme", window: "Window", help: "Help",
+                website: "Website", feedback: "Feedback",
+                about: "About Rocktier Markdown", license: "License…", quit: "Quit",
+            },
+        }
+    }
+}
+
 fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     build_app_menu(&app, &lang).map_err(|e| e.to_string())
 }
