@@ -220,6 +220,16 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
+/* 这条规则同时命中「行内代码」和「代码块里的 code」。真机实测：pre 的底色
+   是 --bg-surface(#f5f5f5)，再叠一层 --accent-muted 膜 → 合成 #e6e6e6，
+   于是 --code-keyword 4.29:1 / --code-function 4.04:1 双双跌破 4.5:1。
+   代码块内去掉这层膜，代码底回到 #f5f5f5，配色即回到母版验证过的比值。 */
+.md-viewer pre code {
+  background: transparent;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
 
 .md-viewer pre {
   font-family: var(--font-mono);

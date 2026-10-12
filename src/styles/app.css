@@ -179,6 +179,8 @@ html.is-mac .toolbar {
 
 .tbar-btn:active {
   background: var(--accent-hover);
+  /* 按下时背景翻成近乎不透明，文字必须跟着翻，否则按下瞬间文字消失 */
+  color: var(--on-accent);
 }
 
 .tbar-btn.active {
@@ -254,7 +256,10 @@ html.is-mac .toolbar {
 }
 
 .view-switch .tbar-btn.active {
-  background: var(--accent-hover);
+  /* 原用 --accent-hover(hover 淡色)当选中实色，等于把工具栏底色整个翻过来，
+     而文字色没跟着翻 → 深 1.28:1 / 浅 1.23:1。改用成对令牌。 */
+  background: var(--accent);
+  color: var(--on-accent);
   border: none;
 }
 
