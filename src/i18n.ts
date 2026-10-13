@@ -1,10 +1,4 @@
 import { en } from "./i18n.en";
-import { ja } from "./i18n.ja";
-import { ko } from "./i18n.ko";
-import { de } from "./i18n.de";
-import { es } from "./i18n.es";
-import { pt } from "./i18n.pt";
-import { ar } from "./i18n.ar";
 // UI 文案统一走这里：此前工具栏是中文、侧栏/查找栏是英文、toast 中英混杂。
 // 默认跟随系统语言（zh/en），选择持久化到 localStorage。
 import { useEffect, useReducer } from "react";
@@ -12,13 +6,7 @@ import { useEffect, useReducer } from "react";
 /* 家族标准语言表 —— 单一真源，与 PDF / CAD / Sign / Compressor 同构。 */
 export const LOCALES = [
   { code: "en", endonym: "English" },
-  { code: "zh", endonym: "中文" },
-  { code: "ja", endonym: "日本語" },
-  { code: "ko", endonym: "한국어" },
-  { code: "de", endonym: "Deutsch" },
-  { code: "es", endonym: "Español" },
-  { code: "pt", endonym: "Português" },
-  { code: "ar", endonym: "العربية" },
+    { code: "zh", endonym: "中文" }
 ] as const;
 
 export type Lang = (typeof LOCALES)[number]["code"];
@@ -33,7 +21,7 @@ const MOD_KEY =
   typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl+";
 
 const STRINGS = {
-  en, ja, ko, de, es, pt, ar,
+  en,
   zh: {
     "sidebar.files": "文件",
     "sidebar.recent": "最近打开",
