@@ -569,8 +569,6 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     Ok(())
 }
 
-/// 前端挂载后（以及语言切换时）调用，按 UI 语言（"zh" / "en"）构建菜单。
-#[tauri::command]
 /// Menu labels for one language.
 ///
 /// Same approach as PDF's, CAD's and Sign's menus: a struct per language
@@ -676,6 +674,8 @@ impl MenuStrings {
     }
 }
 
+/// 前端挂载后（以及语言切换时）调用，按 UI 语言构建菜单。
+#[tauri::command]
 fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     build_app_menu(&app, &lang).map_err(|e| e.to_string())
 }
