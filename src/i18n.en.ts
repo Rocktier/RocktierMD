@@ -1,20 +1,17 @@
 /* 英文基准字典 —— 键结构的**唯一真源**。
  *
- * 为什么独立成文件：生成物 `i18n.<lang>.ts` 声明为 `export const ja: Strings`，
- * 而 `Strings` 若定义成 `typeof STRINGS.en`，就与 STRINGS 里的 `ja` 自己
- * 互相引用 —— tsc 报 TS2502（自己引用自己的类型标注）。
+ * 为什么独立成文件：`Strings` 若定义成 `typeof STRINGS.en`，会与 STRINGS 里
+ * 的语言块自己互相引用 —— tsc 报 TS2502（自己引用自己的类型标注）。
+ * 抽出来之后依赖是单向的：
  *
- * 把英文块抽出来之后依赖是单向的：
+ *     i18n.en.ts  ──(Strings)──▶  i18n.ts（en/zh 两块）
  *
- *     i18n.en.ts  ──(Strings)──▶  i18n.{ja,ko,de,es,pt,ar}.ts
- *         │
- *         └──(en)──▶  i18n.ts  ──(ja…ar)──▶  i18n.{ja,ko,…}.ts
- *
- * 改动流程：改英文文案只改本文件；改译文改 scripts/i18n/<lang>.mjs 后重跑
- * scripts/gen-i18n.mjs，不要直接编辑生成物。
+ * 改动流程：改英文文案只改本文件；改中文改 src/i18n.ts 的 zh 块。
+ * （2026-10-13 家族收敛为 en/zh 两门后，scripts/gen-i18n.mjs 的 LANGS 已清空，
+ *  不再有生成物；scripts/i18n/<lang>.mjs 仅作历史档案。）
  */
 
-/** 8 门语言共用的键结构。tsc 会校验每份译文与它一致 —— 这是第二道保险。 */
+/** 中英两门共用的键结构。tsc 会校验译文与它一致 —— 这是第二道保险。 */
 export const en = {
     "sidebar.files": "Files",
     "sidebar.recent": "Recent",
