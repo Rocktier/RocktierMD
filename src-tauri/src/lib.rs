@@ -453,7 +453,7 @@ fn clear_recovery(app: tauri::AppHandle, path: String) -> Result<(), String> {
 /// 自定义项的点击经 on_menu_event 转成 "menu-action" 事件发给前端；
 /// 预定义项（撤销/拷贝/粘贴/最小化等）由系统自动本地化并自带快捷键。
 fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
-    let m = MenuStrings::for_lang(&lang);
+    let m = MenuStrings::for_lang(lang);
 
     let new_i = MenuItem::with_id(app, "new", m.new, true, Some("CmdOrCtrl+N"))?;
     let open_i = MenuItem::with_id(app, "open", m.open, true, Some("CmdOrCtrl+O"))?;
