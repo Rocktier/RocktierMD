@@ -451,8 +451,8 @@ html.is-mac .toolbar {
 }
 
 .toc-collapse {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--border-mid);
   border-radius: 6px;
   background: var(--accent-muted);
@@ -460,7 +460,7 @@ html.is-mac .toolbar {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -707,7 +707,7 @@ html.is-mac .toolbar {
 .status-bar {
   display: flex;
   align-items: center;
-  height: 22px;
+  height: 26px;
   padding: 0 12px;
   background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
   border-top: 1px solid var(--border, rgba(255, 255, 255, 0.04));
@@ -724,11 +724,15 @@ html.is-mac .toolbar {
   background: var(--border, rgba(255, 255, 255, 0.06));
 }
 
-/* 语言切换（status bar 右端，低调入口） */
+/* 语言切换（status bar 右端，低调入口）。24px 命中区：2026-10-16 UX 审计
+   实测原生 select 只有 15px 高，点不实。注：语言集 2026-10-13 已收敛为
+   en/zh，旧注释「8 门」作废。 */
 .status-lang {
   margin-left: auto;
   background: none;
   border: none;
+  box-sizing: border-box;
+  height: 24px;
   padding: 0 2px;
   font: inherit;
   font-size: 11px;
@@ -748,6 +752,15 @@ html.is-mac .toolbar {
 .view-preview .md-viewer {
   max-width: 860px;
   margin: 0 auto;
+}
+
+/* GFM 任务复选框：可点击切换（Preview.tsx 会解除 disabled 并委派点击）。
+   13px 是浏览器默认值，2026-10-16 UX 审计实测命中区过小 —— 提到 16px
+   （与 GitHub / VS Code 渲染态一致；正文内联控件，不作 24px  chrome 标准）。 */
+.md-viewer input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
 }
 
 .view-preview .preview-pane {

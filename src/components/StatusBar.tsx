@@ -45,9 +45,9 @@ export const StatusBar = memo(function StatusBar({ words, line, column, gitBranc
         </button>
       )}
       <span className="sep" />
-      {/* 家族标准 8 门语言。原为 en/zh 二选一按钮 —— 6 门接入后没法用。
-          用原生 select：8 个选项不需要搜索，跨平台行为一致，
-          键盘与读屏器支持免费获得。选项显示 endonym（语言自称）。 */}
+      {/* 家族语言 2026-10-13 收敛为 en/zh 两门（旧注释「标准 8 门」作废）。
+          保留原生 select：选项少也维持跨平台一致行为，键盘与读屏器支持
+          免费获得；未来加回多语言时不用改控件。选项显示 endonym（语言自称）。 */}
       <select
         className="status-lang"
         value={getUiLang()}
