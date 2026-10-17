@@ -109,6 +109,7 @@ export const en = {
     "license.wrongProduct": "That code belongs to a different Rocktier app. Each app has its own code — or the family bundle, which unlocks all of them.",
     "license.refunded": "That code was refunded, so it no longer unlocks anything. If this is a mistake, write to hello@rocktier.com with your order number.",
     "license.offline": "Could not reach rocktier.com. Activating needs one connection; after that the app stays offline.",
+    "license.deviceLimit": "This code has reached its device limit. Deactivate a device at rocktier.com/license, then try again.",
     "license.whereToFind": "Your code was shown on the page right after payment, and is in the purchase email too.",
     "license.privacyNote": "Activating sends the code to rocktier.com once and stores the signed reply locally. Nothing else is sent.",
 };
