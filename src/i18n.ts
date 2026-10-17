@@ -122,6 +122,19 @@ const STRINGS = {
     "license.deviceLimit": "这张激活码的设备数已达上限。请先到 rocktier.com/license 解绑一台设备，再重试。",
     "license.whereToFind": "付款后页面上会显示激活码，购买确认邮件里也有一份。",
     "license.privacyNote": "激活会把激活码发送到 rocktier.com 一次，并把签名回执保存在本机。除此之外不传输任何内容。",
+
+    // ── 更新检查 ──
+    // 措辞与 privacy.html 的 Update checks 一节保持一致：应用不主动联网，
+    // 只有点「检查更新」才发一次请求，且请求里不含任何标识信息。
+    "update.check": "检查更新",
+    "update.checking": "正在检查…",
+    "update.upToDate": "已是最新版本。",
+    "update.available": "发现新版本 {v}。",
+    "update.failed": "暂时无法检查。",
+    "update.lastChecked": "上次检查 {d}",
+    "update.never": "从未",
+    "update.download": "获取 {v}",
+    "update.privacyNote": "检查会向 GitHub 发一次请求获取最新版本号。请求不含许可证码，也不含与你的文件有关的任何信息。",
   },
 } as const;
 

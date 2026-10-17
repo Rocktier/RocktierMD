@@ -568,7 +568,15 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     // 购买页面上写着"打开应用 → License → 输入激活码"，所以应用里必须真有一个能到
     // 那儿的入口（授权胶囊在已激活/商店版下会隐藏，帮助菜单是常驻入口）。
     let license_i = MenuItem::with_id(app, "license", m.license, true, None::<&str>)?;
-    let help_menu = Submenu::with_items(app, m.help, true, &[&license_i, &site_i, &mail_i])?;
+    // 检查更新：只 emit "check-updates"，联网由前端 services/updates.ts 做 ——
+    // 应用启动时不检查，只有用户点这里或右下角的版本号才发那一次请求。
+    let update_i = MenuItem::with_id(app, "check-updates", m.check_updates, true, None::<&str>)?;
+    let help_menu = Submenu::with_items(
+        app,
+        m.help,
+        true,
+        &[&update_i, &license_i, &site_i, &mail_i],
+    )?;
 
     let menu = Menu::with_items(
         app,
@@ -606,6 +614,7 @@ struct MenuStrings {
     feedback: &'static str,
     about: &'static str,
     license: &'static str,
+    check_updates: &'static str,
     quit: &'static str,
 }
 
@@ -620,7 +629,7 @@ impl MenuStrings {
                 find: "查找替换", view: "显示", toggle_sidebar: "切换侧栏",
                 toggle_theme: "切换日夜模式", window: "窗口", help: "帮助",
                 website: "官方网站", feedback: "反馈",
-                about: "关于 Rocktier Markdown", license: "许可与激活…", quit: "退出",
+                about: "关于 Rocktier Markdown", check_updates: "检查更新…", license: "许可与激活…", quit: "退出",
             },
             "ja" => Self {
                 new: "新規", open: "開く…", save: "保存", save_as: "名前を付けて保存…",
@@ -628,7 +637,7 @@ impl MenuStrings {
                 find: "検索・置換", view: "表示", toggle_sidebar: "サイドバーの切り替え",
                 toggle_theme: "テーマを切り替え", window: "ウインドウ", help: "ヘルプ",
                 website: "公式サイト", feedback: "フィードバック",
-                about: "Rocktier Markdown について", license: "ライセンス…", quit: "終了",
+                about: "Rocktier Markdown について", check_updates: "アップデートを確認…", license: "ライセンス…", quit: "終了",
             },
             "ko" => Self {
                 new: "새로 만들기", open: "열기…", save: "저장", save_as: "다른 이름으로 저장…",
@@ -636,7 +645,7 @@ impl MenuStrings {
                 find: "찾기 및 바꾸기", view: "보기", toggle_sidebar: "사이드바 전환",
                 toggle_theme: "테마 전환", window: "창", help: "도움말",
                 website: "공식 웹사이트", feedback: "피드백",
-                about: "Rocktier Markdown 정보", license: "라이선스…", quit: "종료",
+                about: "Rocktier Markdown 정보", check_updates: "업데이트 확인…", license: "라이선스…", quit: "종료",
             },
             "de" => Self {
                 new: "Neu", open: "Öffnen…", save: "Speichern", save_as: "Speichern unter…",
@@ -644,7 +653,7 @@ impl MenuStrings {
                 find: "Suchen & Ersetzen", view: "Ansicht", toggle_sidebar: "Seitenleiste umschalten",
                 toggle_theme: "Design wechseln", window: "Fenster", help: "Hilfe",
                 website: "Website", feedback: "Feedback",
-                about: "Über Rocktier Markdown", license: "Lizenz…", quit: "Beenden",
+                about: "Über Rocktier Markdown", check_updates: "Nach Updates suchen…", license: "Lizenz…", quit: "Beenden",
             },
             "es" => Self {
                 new: "Nuevo", open: "Abrir…", save: "Guardar", save_as: "Guardar como…",
@@ -652,7 +661,7 @@ impl MenuStrings {
                 find: "Buscar y reemplazar", view: "Ver", toggle_sidebar: "Alternar barra lateral",
                 toggle_theme: "Cambiar tema", window: "Ventana", help: "Ayuda",
                 website: "Sitio web", feedback: "Comentarios",
-                about: "Acerca de Rocktier Markdown", license: "Licencia…", quit: "Salir",
+                about: "Acerca de Rocktier Markdown", check_updates: "Buscar actualizaciones…", license: "Licencia…", quit: "Salir",
             },
             "pt" => Self {
                 new: "Novo", open: "Abrir…", save: "Salvar", save_as: "Salvar como…",
@@ -660,7 +669,7 @@ impl MenuStrings {
                 find: "Localizar e substituir", view: "Exibir", toggle_sidebar: "Alternar barra lateral",
                 toggle_theme: "Alternar tema", window: "Janela", help: "Ajuda",
                 website: "Site", feedback: "Comentários",
-                about: "Sobre o Rocktier Markdown", license: "Licença…", quit: "Sair",
+                about: "Sobre o Rocktier Markdown", check_updates: "Verificar atualizações…", license: "Licença…", quit: "Sair",
             },
             "ar" => Self {
                 new: "جديد", open: "فتح…", save: "حفظ", save_as: "حفظ باسم…",
@@ -668,7 +677,7 @@ impl MenuStrings {
                 find: "بحث واستبدال", view: "عرض", toggle_sidebar: "تبديل الشريط الجانبي",
                 toggle_theme: "تبديل المظهر", window: "نافذة", help: "مساعدة",
                 website: "الموقع", feedback: "ملاحظات",
-                about: "حول Rocktier Markdown", license: "الترخيص…", quit: "إنهاء",
+                about: "حول Rocktier Markdown", check_updates: "التحقق من التحديثات…", license: "الترخيص…", quit: "إنهاء",
             },
             // English is both the family default and the fallback.
             _ => Self {
@@ -677,7 +686,7 @@ impl MenuStrings {
                 find: "Find & Replace", view: "View", toggle_sidebar: "Toggle Sidebar",
                 toggle_theme: "Toggle Theme", window: "Window", help: "Help",
                 website: "Website", feedback: "Feedback",
-                about: "About Rocktier Markdown", license: "License…", quit: "Quit",
+                about: "About Rocktier Markdown", check_updates: "Check for Updates…", license: "License…", quit: "Quit",
             },
         }
     }

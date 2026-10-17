@@ -112,6 +112,20 @@ export const en = {
     "license.deviceLimit": "This code has reached its device limit. Deactivate a device at rocktier.com/license, then try again.",
     "license.whereToFind": "Your code was shown on the page right after payment, and is in the purchase email too.",
     "license.privacyNote": "Activating sends the code to rocktier.com once and stores the signed reply locally. Nothing else is sent.",
+
+    // ── Update checks ──
+    // Wording matches the "Update checks" section of privacy.html: the app
+    // never connects on its own; clicking Check for updates sends one
+    // request, and that request carries no identifier of any kind.
+    "update.check": "Check for updates",
+    "update.checking": "Checking…",
+    "update.upToDate": "You have the latest version.",
+    "update.available": "Version {v} is available.",
+    "update.failed": "Could not check right now.",
+    "update.lastChecked": "Checked {d}",
+    "update.never": "never",
+    "update.download": "Get {v}",
+    "update.privacyNote": "Checking sends one request to GitHub for the latest version number. It carries no license code and nothing about your files.",
 };
 
 /** 译文文件用这个类型做结构校验。 */

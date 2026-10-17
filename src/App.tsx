@@ -9,6 +9,7 @@ import { FindReplace } from "./components/FindReplace";
 import { StatusBar } from "./components/StatusBar";
 import { LicenseDialog } from "./components/LicenseDialog";
 import { licenseStatus, onLicenseExpired, isLicenseExpiredError, type LicenseInfo } from "./services/license";
+import { checkForUpdates, currentVersion, type UpdateResult } from "./services/updates";
 import { useTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -30,6 +31,13 @@ import { t, useUiLang } from "./i18n";
 /* 2026-10-04 键改名：家族命名空间统一用「.」，此前 MD 用的是 "rocktier-md-…"（连字符）。
  * 改名只为跨产品一致，不该顺手清掉用户已选的偏好 —— 所以读取处仍回落旧键。旧键不删。 */
 // 只写键（仅 setItem/removeItem，无读取点）—— 改名无需迁移数据，故不留 legacy 常量。
+const UPDATE_CHECKED_KEY = "rocktier.md.updateCheckedAt";
+
+/** 打包时写死，与 tag 同源 —— 不会出现系统里装着新版本而代码里写着旧版本的错位。 */
+const VERSION = currentVersion();
+
+type UpdateState = "idle" | "checking" | "uptodate" | "available" | "failed";
+
 const LAST_PATH_KEY = "rocktier.last-path";
 const RECENT_KEY = "rocktier.md.recent";
 const RECENT_KEY_LEGACY = "rocktier-md-recent";
@@ -67,6 +75,16 @@ export default function App() {
   // 授权（家族 L6）：状态轮询 + 对话框开关。null = 尚未取到（或浏览器 dev）。
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  /* 更新检查。状态只由用户点击推进 —— 没有任何 effect 会自动跑它，
+     这是「除非你要求，应用不会联网」这条承诺的落点。 */
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(() => {
+    const raw = localStorage.getItem(UPDATE_CHECKED_KEY);
+    const n = raw ? Number(raw) : 0;
+    return n > 0 ? n : null;
+  });
+  const updateChecking = useRef(false);
   const toastRef = useRef(0);
   const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -137,6 +155,25 @@ export default function App() {
     setLicenseOpen(true);
     refreshLicense();
   }, [refreshLicense]);
+
+  /* 检查更新。**只有这里会触发联网检查** —— 右下角入口与帮助菜单共用。
+     用 ref 而非 state 判重：连点两次不该发出两个请求。 */
+  const runUpdateCheck = useCallback(async () => {
+    if (updateChecking.current) return;
+    updateChecking.current = true;
+    setUpdateState("checking");
+    try {
+      const result = await checkForUpdates();
+      setUpdateResult(result);
+      setLastCheckedAt(result.checkedAt);
+      try { localStorage.setItem(UPDATE_CHECKED_KEY, String(result.checkedAt)); } catch { /* 隐私模式下忽略 */ }
+      setUpdateState(result.hasUpdate ? "available" : "uptodate");
+    } catch {
+      setUpdateState("failed");
+    } finally {
+      updateChecking.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     refreshLicense();
@@ -495,6 +532,7 @@ export default function App() {
           case "license": openLicense(); break;
           case "website": void invoke('open_url', { url: 'https://rocktier.com/' }).catch(() => {}); break;
           case "feedback": void invoke('open_url', { url: 'mailto:hello@rocktier.com' }).catch(() => {}); break;
+          case "check-updates": void runUpdateCheck(); break;
         }
       })
       .then((fn) => {
@@ -505,7 +543,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace, openLicense]);
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace, openLicense, runUpdateCheck]);
 
   const shortcuts = useMemo(
     () => ({
@@ -912,6 +950,42 @@ export default function App() {
         license={license}
         onLicenseClick={openLicense}
       />
+      {/* 更新检查入口。固定右下角，而不是去改 StatusBar 的 props ——
+          StatusBar 是多个产品共用的组件，为这一个入口动它的接口不值得。
+          点击才联网：启动时、工作中、后台都不检查，见 services/updates.ts 头注。 */}
+      <div className={`update-corner${updateState === "available" ? " has-update" : ""}`}>
+        <button
+          type="button"
+          className="update-line"
+          onClick={() => void runUpdateCheck()}
+          disabled={updateState === "checking"}
+          title={t("update.privacyNote")}
+        >
+          <span className="update-ver">v{VERSION}</span>
+          <span className="update-sep" aria-hidden="true">·</span>
+          <span className="update-action">
+            {updateState === "checking" ? t("update.checking") : t("update.check")}
+          </span>
+        </button>
+        <div className="update-note" role="status" aria-live="polite">
+          {updateState === "uptodate" && t("update.upToDate")}
+          {updateState === "failed" && t("update.failed")}
+          {updateState === "available" && updateResult && (
+            <button
+              type="button"
+              className="update-get"
+              onClick={() => void invoke("open_url", { url: updateResult.url }).catch(() => {})}
+              title={t("update.available", { v: updateResult.latest })}
+            >
+              {t("update.download", { v: updateResult.latest })}
+            </button>
+          )}
+          {updateState === "idle" &&
+            t("update.lastChecked", {
+              d: lastCheckedAt ? formatCheckedAt(lastCheckedAt) : t("update.never"),
+            })}
+        </div>
+      </div>
       {licenseOpen && (
         <LicenseDialog info={license} onRefresh={refreshLicense} onClose={() => setLicenseOpen(false)} />
       )}
@@ -943,4 +1017,16 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/**
+ * 「上次检查」的时间戳格式化。跟随界面语言 —— documentElement.lang
+ * 由 i18n 模块维护（中文界面下是 zh-CN），避免中英混排。
+ */
+function formatCheckedAt(ts: number): string {
+  try {
+    return new Date(ts).toLocaleDateString(document.documentElement.lang || "en");
+  } catch {
+    return new Date(ts).toISOString().slice(0, 10);
+  }
 }
