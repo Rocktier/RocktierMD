@@ -8,7 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { FindReplace } from "./components/FindReplace";
 import { StatusBar } from "./components/StatusBar";
 import { LicenseDialog } from "./components/LicenseDialog";
-import { licenseStatus, onLicenseExpired, isLicenseExpiredError, type LicenseInfo } from "./services/license";
+import { licenseStatus, onLicenseExpired, isLicenseExpiredError, revalidateLicence, type LicenseInfo } from "./services/license";
 import { checkForUpdates, currentVersion, type UpdateResult } from "./services/updates";
 import { useTheme } from "./hooks/useTheme";
 import { useScrollSync } from "./hooks/useScrollSync";
@@ -168,12 +168,16 @@ export default function App() {
       setLastCheckedAt(result.checkedAt);
       try { localStorage.setItem(UPDATE_CHECKED_KEY, String(result.checkedAt)); } catch { /* 隐私模式下忽略 */ }
       setUpdateState(result.hasUpdate ? "available" : "uptodate");
+      /* 顺带吊销复检：同一次点击、同一承诺（只在点击时联网）。revoked → 清回执，
+         授权状态回到未激活并弹激活对话框（openLicense 内含 refreshLicense）。 */
+      const verdict = await revalidateLicence();
+      if (verdict === "revoked") openLicense();
     } catch {
       setUpdateState("failed");
     } finally {
       updateChecking.current = false;
     }
-  }, []);
+  }, [openLicense]);
 
   useEffect(() => {
     refreshLicense();
