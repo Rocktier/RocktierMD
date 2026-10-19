@@ -94,6 +94,7 @@ export const en = {
     "license.trialChip": "Trial · {days}d",
     "license.expiredChip": "Not activated",
     "license.expired": "Your trial has ended. Reading and previewing still work; saving and exporting need a license.",
+    "license.revokedNotice": "This licence has been revoked — usually after a refund or a payment dispute. Your licence status has been reset. Activate again below to continue, or write to hello@rocktier.com (with your order number) if you believe this is a mistake.",
     "license.licensed": "Licensed. Thank you.",
     "license.licensedFamily": "Licensed — family bundle. Every Rocktier app is unlocked.",
     "license.licensedNote": "This copy is activated. No further checks, and no network access.",

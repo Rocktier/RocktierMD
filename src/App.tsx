@@ -75,6 +75,9 @@ export default function App() {
   // 授权（家族 L6）：状态轮询 + 对话框开关。null = 尚未取到（或浏览器 dev）。
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  /* B1：吊销复检判定 revoked 时置位，激活框顶部显示「许可已被吊销」专属通告 ——
+     回执已清、info 与试用到期无从区分，verdict 是唯一可靠的传递点。 */
+  const [licenseRevoked, setLicenseRevoked] = useState(false);
   /* 更新检查。状态只由用户点击推进 —— 没有任何 effect 会自动跑它，
      这是「除非你要求，应用不会联网」这条承诺的落点。 */
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
@@ -171,7 +174,10 @@ export default function App() {
       /* 顺带吊销复检：同一次点击、同一承诺（只在点击时联网）。revoked → 清回执，
          授权状态回到未激活并弹激活对话框（openLicense 内含 refreshLicense）。 */
       const verdict = await revalidateLicence();
-      if (verdict === "revoked") openLicense();
+      if (verdict === "revoked") {
+        setLicenseRevoked(true);
+        openLicense();
+      }
     } catch {
       setUpdateState("failed");
     } finally {
@@ -991,7 +997,12 @@ export default function App() {
         </div>
       </div>
       {licenseOpen && (
-        <LicenseDialog info={license} onRefresh={refreshLicense} onClose={() => setLicenseOpen(false)} />
+        <LicenseDialog
+          info={license}
+          revoked={licenseRevoked}
+          onRefresh={refreshLicense}
+          onClose={() => { setLicenseOpen(false); setLicenseRevoked(false); }}
+        />
       )}
       {frontmatterOpen && hasFrontmatter && frontmatterData && (
         <div className="frontmatter-panel" role="complementary" aria-label={t("fm.title")}>
