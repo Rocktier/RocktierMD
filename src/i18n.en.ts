@@ -127,6 +127,9 @@ export const en = {
     "update.never": "never",
     "update.download": "Get {v}",
     "update.privacyNote": "Checking sends one request to GitHub for the latest version number. It carries no license code and nothing about your files.",
+    "update.close": "Close",
+    "update.openReleases": "Open releases",
+    "update.openReleasesHint": "You can also open the releases page directly.",
 };
 
 /** 译文文件用这个类型做结构校验。 */
