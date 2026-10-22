@@ -8,15 +8,23 @@ export interface MarkdownDocument {
 
 export const WELCOME_DOCUMENT = `# Welcome to Rocktier Markdown
 
-A **fast**, elegant Markdown reader. Part of the Rocktier family — private by design.
+A fast, private Markdown editor. Your files stay on your machine — nothing is uploaded, ever.
 
----
+## Start Where You Are
 
-## Real-time Editing
+This document is the demo: it renders while you type. Switch views from the toolbar — editor only, split, or preview. Scroll one side, and the other follows.
 
-Type on the left, see beautifully rendered output on the right. Scroll on one side, the other follows.
+Type \`# \` for a heading, \`## \` for a subheading. Every heading lands in the sidebar outline; click one to jump straight to it.
 
-### Code Highlighting
+## CommonMark + GFM, Rendered
+
+**Bold**, *italic*, ~~strikethrough~~, links, tables and task lists.
+
+- [x] Tables and task lists
+- [x] Syntax highlighting in 20 languages
+- [x] Math, typeset by KaTeX
+
+### Code
 
 \`\`\`rust
 fn main() {
@@ -25,30 +33,28 @@ fn main() {
 }
 \`\`\`
 
-\`\`\`
-const greeting = () => console.log("Simple and fast");
-\`\`\`
+### Math
 
-### Task Lists
+Inline math sits inside a sentence — the area of a circle is $A = \\pi r^2$ — or takes a line of its own:
 
-- [x] CommonMark + GFM
-- [x] Syntax highlighting
-- [x] Scroll sync
-- [ ] KaTeX (math)
-- [ ] Mermaid diagrams
+$$
+e^{i\\pi} + 1 = 0
+$$
 
-### Tables
+### Shortcuts
 
-| Feature    | Status |
-|------------|--------|
-| Editing    | Done   |
-| Preview    | Done   |
-| Highlight  | Done   |
+| Action | Shortcut |
+| --- | --- |
+| Save | \`Ctrl/Cmd + S\` |
+| Find & replace | \`Ctrl/Cmd + F\` |
+| Export PDF | \`Ctrl/Cmd + Shift + P\` |
+| Sidebar | \`Ctrl/Cmd + \\\` |
 
-### Blockquote
+## Your Draft Is Safe
 
-> Simplicity is the ultimate sophistication.
-> — Leonardo da Vinci
+A few seconds after you stop typing, a recovery copy is written to disk. If the app ever quits unexpectedly, the next launch offers to bring it back.
+
+Your files themselves are saved only when you save them — with \`Ctrl/Cmd + S\`, or the toolbar. No cloud, no account, no sync.
 
 ---
 
