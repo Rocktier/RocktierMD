@@ -2950,7 +2950,7 @@ dependencies = [
 
 [[package]]
 name = "rocktier-markdown"
-version = "1.0.16"
+version = "1.0.17"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
