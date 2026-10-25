@@ -410,7 +410,9 @@ html.is-mac .toolbar {
   gap: 8px;
 }
 
-.sidebar-section h3 {
+/* 侧栏分区标题：非标题元素（div）。此前是 h3 —— 读屏的标题序列会从这 4 个
+   h3 起跳、排在文档 h1 之前，结构层级是错的（2026-10-25 审计 D-78）。 */
+.sidebar-section-title {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -446,7 +448,7 @@ html.is-mac .toolbar {
   align-items: center;
 }
 
-.sidebar-head h3 {
+.sidebar-head .sidebar-section-title {
   margin: 0;
 }
 
@@ -893,18 +895,8 @@ html.is-mac .toolbar {
    License（家族 L6）：状态栏授权胶囊 + 许可与激活对话框
    ═══════════════════════════════════════════════════════════════════ */
 
-/* 状态栏胶囊：低调，过期时转警示色（点击打开许可对话框） */
-.status-license {
-  background: none;
-  border: none;
-  padding: 0 2px;
-  font: inherit;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-.status-license:hover { color: var(--text-primary); }
-.status-license.expired { color: var(--warn); }
+/* 状态栏胶囊（点击打开许可对话框）：样式已收编为母版 tokens.css 的
+   .badge-license（2026-10-25 审计 D-78），本地不再保留视觉定义。 */
 
 .license-overlay {
   position: fixed;
@@ -1124,4 +1116,13 @@ html.is-mac .toolbar {
   border-color: transparent;
   color: var(--on-accent, #fff);
   font-weight: 600;
+}
+
+/* ── 浅色档三栏分隔增强（2026-10-25 审计 D-78）──────────────────
+   #f5f5f5 侧栏/预览 vs #fff 编辑区的表面差，叠 0.08 发丝线，
+   浅色下肉眼难辨，区域边界靠猜。浅色把两条栏界提到 --border-hover
+   一档；深色对比已足够，不动。 */
+[data-theme="light"] .sidebar,
+[data-theme="light"] .editor-pane {
+  border-right-color: var(--border-hover);
 }

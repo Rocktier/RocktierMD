@@ -89,7 +89,7 @@
         "enable": true,
         "scope": ["**"]
       },
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com https://api.github.com; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; style-src-attr 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com https://api.github.com; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
     }
   },
   "plugins": {

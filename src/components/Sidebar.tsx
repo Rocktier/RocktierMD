@@ -35,8 +35,10 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
           </button>
         </div>
         <div className="sidebar-body">
+          {/* 侧栏分区标题不用 h3：读屏的标题序列应从文档 h1 开始，
+              侧栏小节名是界面标签不是文档结构（2026-10-25 审计 D-78）。 */}
           <div className="sidebar-section">
-            <h3>{t("sidebar.actions")}</h3>
+            <div className="sidebar-section-title">{t("sidebar.actions")}</div>
             <button className="sidebar-item" onClick={onOpen}>
               <span className="icon">
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2">
@@ -49,7 +51,7 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
 
           {recent.length > 0 && (
             <div className="sidebar-section">
-              <h3>{t("sidebar.recent")}</h3>
+              <div className="sidebar-section-title">{t("sidebar.recent")}</div>
               {recent.map((p) => (
                 <button
                   key={p}
@@ -71,7 +73,7 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
           {/* 大纲区块常驻：无标题时给弱化占位，而不是整块消失让布局跳变 */}
           <div className="sidebar-section">
             <div className="sidebar-head">
-              <h3>{t("sidebar.outline")}</h3>
+              <div className="sidebar-section-title">{t("sidebar.outline")}</div>
               <button
                 className="toc-collapse"
                 onClick={() => setCollapsed((c) => !c)}
@@ -116,7 +118,7 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
           </div>
 
           <div className="sidebar-section">
-            <h3>{t("sidebar.shortcuts")}</h3>
+            <div className="sidebar-section-title">{t("sidebar.shortcuts")}</div>
             <div className="shortcuts">
               <div className="row"><span className="key">⌘ N</span><span className="desc">{t("sc.new")}</span></div>
               <div className="row"><span className="key">⌘ O</span><span className="desc">{t("sc.open")}</span></div>
