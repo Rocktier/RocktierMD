@@ -33,8 +33,8 @@ export const StatusBar = memo(function StatusBar({ words, line, column, gitBranc
       )}
       <span className="spacer" />
       {showLicenseChip && (
-        {/* 徽标颜色统一由 .badge-license（母版 tokens.css）负责，试用/过期同色，
-            不再用 expired 修饰类切警示色。 */}
+        /* 徽标颜色统一由 .badge-license（母版 tokens.css）负责，试用/过期同色，
+            不再用 expired 修饰类切警示色。 */
         <button
           type="button"
           className="badge-license"
