@@ -124,6 +124,23 @@ export default function App() {
   const headings = useMemo(() => extractHeadings(deferredContent), [deferredContent]);
   const taskLines = useMemo(() => getTaskLines(deferredContent), [deferredContent]);
   const stats = useMemo(() => readStats(deferredContent), [deferredContent]);
+
+  /* 大纲密度（设计稿 07 的签名元素：每条大纲右侧一根细条）。
+     度量是真实的：每节占的行数 / 全文最长节的行数，归一到百分比。
+     「哪一节太胖」一眼可见 —— 这比「我在第几行」更接近长文档的真实问题。 */
+  const headingDensities = useMemo(() => {
+    const lines = deferredContent.split("\n");
+    const raw = headings.map((h, i) => {
+      const start = Math.max(0, h.line - 1);
+      const end =
+        i + 1 < headings.length
+          ? Math.max(start + 1, headings[i + 1].line - 1)
+          : lines.length;
+      return end - start;
+    });
+    const max = Math.max(1, ...raw);
+    return raw.map((n) => Math.round((n / max) * 100));
+  }, [headings, deferredContent]);
   const frontmatterData = useMemo<Frontmatter | null>(() =>
     parsed.frontmatter ? parseFrontmatter(parsed.frontmatter) : null, [parsed.frontmatter]);
 
@@ -563,6 +580,11 @@ export default function App() {
 
   const displayName = doc.path ? baseName(doc.path) : t("doc.untitled");
   const hasFrontmatter = frontmatterData !== null;
+  /* 预览更新中：useDeferredValue 还没追上最新输入，预览正落后于源码 ——
+     这是真实的「进行中」，状态栏据此亮呼吸点。追上后自然回落。 */
+  const syncing = deferredContent !== doc.content;
+  /* 全文行数：按换行切分（空文档也是 1 行），与状态栏口径一致。 */
+  const totalLines = doc.content.split("\n").length;
 
   // 在桌面端通过 Tauri 拖放事件 / 浏览器 dev 通过 HTML5 拖放打开文件。
   // 注意：打包版（dragDropEnabled 默认 true）下 HTML5 drop 不会触发，
@@ -869,9 +891,8 @@ export default function App() {
         onOpen={doOpen}
         onSave={doSave}
         modified={doc.modified}
+        hasPath={!!doc.path}
         displayName={displayName}
-        words={stats.words}
-        minutes={stats.minutes}
         themeMode={themeMode}
         onToggleTheme={cycleTheme}
         onFindReplace={toggleFindReplace}
@@ -890,7 +911,9 @@ export default function App() {
           onOpen={doOpen}
           onClose={() => setSidebar(false)}
           headings={headings}
+          densities={headingDensities}
           recent={recent}
+          currentPath={doc.path}
           onOpenRecent={(p) => {
             openMarkdownPath(p);
             setSidebar(false);
@@ -920,6 +943,8 @@ export default function App() {
               onImagePaste={() => showToast(t("toast.imageInserted"), "success")}
               saveImagePaste={saveImagePaste}
               onCursorMove={onCursorMove}
+              line={cursorLine}
+              col={cursorCol}
             />
           )}
           {findReplaceOpen && (
@@ -946,8 +971,12 @@ export default function App() {
       </div>
       <StatusBar
         words={stats.words}
-        line={cursorLine}
-        column={cursorCol}
+        lines={totalLines}
+        minutes={stats.minutes}
+        displayName={displayName}
+        hasPath={!!doc.path}
+        modified={doc.modified}
+        syncing={syncing}
         gitBranch={gitBranch}
         license={license}
         onLicenseClick={openLicense}

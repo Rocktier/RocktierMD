@@ -10,11 +10,14 @@ interface Props {
   onImagePaste?: () => void;
   saveImagePaste?: (dataUrl: string) => Promise<string | null>;
   onCursorMove?: () => void;
+  /** 光标行/列（真实状态，来自 textarea selection），面板头右侧展示 */
+  line?: number;
+  col?: number;
 }
 
 const INDENT = "  ";
 
-export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste, saveImagePaste, onCursorMove }: Props) {
+export const Editor = memo(function Editor({ content, onChange, textareaRef, onScroll, onImagePaste, saveImagePaste, onCursorMove, line = 1, col = 1 }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef || internalRef;
   useUiLang(); // 语言切换时重渲染
@@ -147,6 +150,13 @@ export const Editor = memo(function Editor({ content, onChange, textareaRef, onS
 
   return (
     <div className="editor-pane">
+      {/* 面板头（设计稿 07：源码栏顶部一条 32px 的标签行）：
+          左侧写「源码」，右侧光标行列来自真实 selection，不编造。 */}
+      <div className="pane-head">
+        <b>{t("pane.source")}</b>
+        <span className="spacer" />
+        <span className="mono">{t("status.lineCol", { line, col })}</span>
+      </div>
       <div className="editor-scroll">
         <textarea
           ref={ref as React.Ref<HTMLTextAreaElement>}

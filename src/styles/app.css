@@ -120,6 +120,14 @@ html.is-mac .toolbar {
   margin-left: 2px;
 }
 
+/* 一句话自述（家族常量 4）：产品名后说明这个软件干什么。窄屏让位给文件名。 */
+.brand-tagline {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
 .doc-pill {
   display: flex;
   align-items: center;
@@ -136,11 +144,19 @@ html.is-mac .toolbar {
   text-overflow: ellipsis;
 }
 
-.doc-pill.modified .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
+/* 名字旁的状态词：未保存（红点+红字，双编码）/ 已保存（灰字，无点）。
+   红点永不单独编码状态 —— 旁边一定有这个词（家族常量 2）。 */
+.doc-pill .state {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.doc-pill.is-unsaved .state {
+  color: var(--red-ink);
+  font-weight: 500;
+}
+
+.doc-pill .dot-live {
   flex-shrink: 0;
 }
 
@@ -189,56 +205,34 @@ html.is-mac .toolbar {
   border: 1px solid var(--border-mid);
 }
 
-.tbar-btn.has-action {
-  color: var(--accent);
-  position: relative;
-}
-
-.tbar-btn.has-action::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+/* ── 主操作按钮：导出 PDF（设计稿 07 顶栏唯一的 primary）──────────────
+   实底反白用家族单色 accent（深色白底黑字 / 浅色黑底白字），
+   不占用品牌红 —— 红只作状态点（家族常量 1）。 */
+.export-btn {
+  height: 28px;
+  padding: 0 12px;
+  margin-left: 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
   background: var(--accent);
-  opacity: 0.8;
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: none;
+  transition: background-color var(--dur-state) var(--ease),
+              border-color var(--dur-state) var(--ease);
 }
 
-/* ── Stats in Toolbar ──────────────────────────────────────────── */
-
-.tbar-btn.stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 8px;
-  width: auto;
-  font-variant-numeric: tabular-nums;
-  cursor: default;
+.export-btn:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
-.tbar-btn.stat:hover {
-  background: none;
-  color: inherit;
-}
-
-.tbar-btn.stat .stat-num {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.tbar-btn.stat .stat-sep {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.tbar-btn.stat .stat-min {
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-
+/* ── 视图切换：分段控件（设计稿 07 顶栏 seg）─────────────────────────
+   三个词与面板一致：仅编辑 / 分屏 / 仅预览。选中态实底反白
+   （aria-pressed 驱动，不靠颜色单独编码）。 */
 .view-switch {
   display: flex;
   background: var(--accent-muted);
@@ -248,19 +242,62 @@ html.is-mac .toolbar {
   gap: 1px;
 }
 
-.view-switch .tbar-btn {
-  width: 28px;
+.view-switch .seg-btn {
   height: 24px;
-  border-radius: var(--radius-pill);
+  padding: 0 10px;
   border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-state) var(--ease),
+              color var(--dur-state) var(--ease);
 }
 
-.view-switch .tbar-btn.active {
-  /* 原用 --accent-hover(hover 淡色)当选中实色，等于把工具栏底色整个翻过来，
-     而文字色没跟着翻 → 深 1.28:1 / 浅 1.23:1。改用成对令牌。 */
+.view-switch .seg-btn:hover {
+  background: var(--accent-hover);
+  color: var(--text-primary);
+}
+
+.view-switch .seg-btn[aria-pressed="true"] {
+  /* 选中 = 实底反白（成对令牌 --accent/--on-accent），不只靠颜色，
+     aria-pressed 同时向读屏表达选中。 */
   background: var(--accent);
   color: var(--on-accent);
-  border: none;
+  font-weight: 500;
+}
+
+/* ── 面板头：源码 / 预览栏顶部的标签行（设计稿 07 .pane-head）──────── */
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex: none;
+  user-select: none;
+}
+
+.pane-head b {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pane-head .mono {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.pane-head .spacer {
+  flex: 1;
 }
 
 .editor-container {
@@ -442,6 +479,38 @@ html.is-mac .toolbar {
   flex-shrink: 0;
 }
 
+/* ── 侧栏文件区（设计稿 07 .rail）────────────────────────────────
+   「打开文件」常驻入口 + 最近打开列表；当前文档用 aria-current 高亮。 */
+.sidebar-item.rail-open {
+  width: 100%;
+  text-align: left;
+}
+
+.rail-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-item.is-current {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.rail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 大纲区块在固定高度列表前占住剩余空间，短文档时快捷键区不会被顶到中间 */
+.sidebar-section--outline {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
 .sidebar-head {
   display: flex;
   justify-content: space-between;
@@ -532,6 +601,9 @@ html.is-mac .toolbar {
 }
 
 .toc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   font-size: 12.5px;
   padding: 5px 8px;
@@ -543,6 +615,31 @@ html.is-mac .toolbar {
   text-overflow: ellipsis;
   border-left: 2px solid transparent;
   transition: all var(--dur-fast);
+}
+
+/* 标题文字占剩余宽度，省略号在文字上而不是整行 */
+.toc-item .toc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 密度条（设计稿 07 .density）：44px 细条，长度=该节行数占比。
+   单色（--text-tertiary 填充 / --border-strong 槽），不占品牌红。 */
+.toc-item .density {
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+  flex: none;
+}
+
+.toc-item .density i {
+  display: block;
+  height: 100%;
+  background: var(--text-tertiary);
 }
 
 .toc-item:hover {
@@ -609,6 +706,13 @@ html.is-mac .toolbar {
   border-left: 3px solid var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--bg-floating));
   color: var(--text-primary);
+}
+
+/* 自述先让位：窄窗口下文件名比口号重要 */
+@media (max-width: 1040px) {
+  .brand-tagline {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -724,6 +828,40 @@ html.is-mac .toolbar {
   width: 1px;
   height: 12px;
   background: var(--border, rgba(255, 255, 255, 0.06));
+}
+
+/* ── 状态栏内容（设计稿 07 .statusbar）────────────────────────────
+   左起：进行态（红点+文字）/ 文件名 / 字数·行数·阅读时长（mono），
+   右端是导出快捷键提示。数字全部来自真实状态（stats / doc.modified）。 */
+.status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.status-state .dot-live {
+  flex: none;
+}
+
+.status-file {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-bar .mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.status-hint {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
 }
 
 /* 语言切换（status bar 右端，低调入口）。24px 命中区：2026-10-16 UX 审计

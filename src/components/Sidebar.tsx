@@ -7,27 +7,35 @@ interface Props {
   onOpen: () => void;
   onClose: () => void;
   headings: Heading[];
+  /** 每条大纲的密度（0–100，该节行数 / 最长节），与 headings 按下标对齐 */
+  densities?: number[];
   onJumpTo: (line: number) => void;
   recent?: string[];
   onOpenRecent?: (path: string) => void;
+  /** 当前文档路径：只用来给「最近打开」加 aria-current 高亮，没有就都不亮 */
+  currentPath?: string | null;
 }
 
-/** 快捷键表的修饰键：写死 ⌘ 会在 Windows/Linux 上与实际行为（Ctrl）对不上。 */
+/** 快捷键表的修饰键：写死 ⌘ 会在 Windows/Linux 上与行为（Ctrl）对不上。 */
 const MOD = /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl";
 
-export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, onJumpTo, recent = [], onOpenRecent }: Props) {
+export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, densities, onJumpTo, recent = [], onOpenRecent, currentPath }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [filter, setFilter] = useState("");
   useUiLang(); // 语言切换时重渲染
 
-  const filtered = filter
-    ? headings.filter((h) => h.text.toLowerCase().includes(filter.toLowerCase()))
-    : headings;
+  /* 过滤时保住原下标：densities 与 headings 对齐，过滤后仍要取到正确那根 */
+  const filtered = (filter
+    ? headings
+        .map((h, i) => ({ h, i }))
+        .filter(({ h }) => h.text.toLowerCase().includes(filter.toLowerCase()))
+    : headings.map((h, i) => ({ h, i }))
+  );
 
   return (
     <>
       {open && <div className="sidebar-overlay" onClick={onClose} />}
-      <aside className={`sidebar ${open ? "open" : ""}`}>
+      <aside className={`sidebar ${open ? "open" : ""}`} aria-label={t("sidebar.files")}>
         <div className="sidebar-header">
           <span className="sidebar-title">{t("sidebar.files")}</span>
           <button className="sidebar-close" onClick={onClose} aria-label={t("sidebar.close")}>
@@ -38,43 +46,46 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
           </button>
         </div>
         <div className="sidebar-body">
-          {/* 侧栏分区标题不用 h3：读屏的标题序列应从文档 h1 开始，
-              侧栏小节名是界面标签不是文档结构（2026-10-25 审计 D-78）。 */}
-          <div className="sidebar-section">
-            <div className="sidebar-section-title">{t("sidebar.actions")}</div>
-            <button className="sidebar-item" onClick={onOpen}>
-              <span className="icon">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2">
-                  <path d="M2 3h3l1.4 1.3H10a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-                </svg>
-              </span>
-              {t("sidebar.openFile")}
-            </button>
-          </div>
+          {/* 新建在顶栏，这里补「打开文件」：侧栏仍是文件入口，而不是只剩大纲 */}
+          <button className="sidebar-item rail-open" onClick={onOpen}>
+            <span className="icon">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                <path d="M2 3h3l1.4 1.3H10a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+              </svg>
+            </span>
+            {t("sidebar.openFile")}
+          </button>
 
           {recent.length > 0 && (
             <div className="sidebar-section">
               <div className="sidebar-section-title">{t("sidebar.recent")}</div>
-              {recent.map((p) => (
-                <button
-                  key={p}
-                  className="sidebar-item"
-                  onClick={() => onOpenRecent?.(p)}
-                  title={p}
-                >
-                  <span className="icon">
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
-                      <path d="M2 3h3l1.4 1.3H10a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-                    </svg>
-                  </span>
-                  {p.split(/[/\\]/).pop()}
-                </button>
-              ))}
+              <div className="rail-recent">
+                {recent.map((p) => {
+                  const name = p.split(/[/\\]/).pop();
+                  const current = !!currentPath && p === currentPath;
+                  return (
+                    <button
+                      key={p}
+                      className={`sidebar-item ${current ? "is-current" : ""}`}
+                      onClick={() => onOpenRecent?.(p)}
+                      title={p}
+                      aria-current={current ? "true" : undefined}
+                    >
+                      <span className="icon">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+                          <path d="M4 1.5h5l3 3v10H4zM9 1.5v3h3" />
+                        </svg>
+                      </span>
+                      <span className="rail-name">{name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {/* 大纲区块常驻：无标题时给弱化占位，而不是整块消失让布局跳变 */}
-          <div className="sidebar-section">
+          <div className="sidebar-section sidebar-section--outline">
             <div className="sidebar-head">
               <div className="sidebar-section-title">{t("sidebar.outline")}</div>
               <button
@@ -99,7 +110,7 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
                     onChange={(e) => setFilter(e.target.value)}
                   />
                   <nav className="toc">
-                    {filtered.map((h, i) => (
+                    {filtered.map(({ h, i }) => (
                       <button
                         key={i}
                         className={`toc-item level-${h.level}`}
@@ -111,7 +122,13 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
                         }}
                         title={h.text}
                       >
-                        {h.text}
+                        <span className="toc-text">{h.text}</span>
+                        {/* 密度条（设计稿 07 签名元素）：长度=该节行数占比，纯真实数据 */}
+                        {densities && (
+                          <span className="density" aria-hidden="true">
+                            <i style={{ width: `${densities[i] ?? 0}%` }} />
+                          </span>
+                        )}
                       </button>
                     ))}
                   </nav>

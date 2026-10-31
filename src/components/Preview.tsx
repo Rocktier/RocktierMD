@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, type RefObject } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { t, useUiLang } from "../i18n";
 import { slugify } from "../services/markdown";
 import { resolvePath, baseDirOf } from "../services/path";
 
@@ -55,6 +56,7 @@ function rewriteImageSources(root: HTMLElement, filePath?: string) {
 export const Preview = memo(function Preview({ html, filePath, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument }: Props) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = previewRef || internalRef;
+  useUiLang(); // 语言切换时重渲染（面板头文案）
 
   useEffect(() => {
     const root = ref.current;
@@ -125,6 +127,13 @@ export const Preview = memo(function Preview({ html, filePath, previewRef, onScr
 
   return (
     <div className="preview-pane">
+      {/* 面板头（设计稿 07）：「预览」+ 滚动同步说明。同步由 useScrollSync 保证，
+          这里只陈述事实，不另造状态。 */}
+      <div className="pane-head">
+        <b>{t("pane.preview")}</b>
+        <span className="spacer" />
+        <span className="mono">{t("pane.synced")}</span>
+      </div>
       <div className="preview-scroll" ref={ref as React.Ref<HTMLDivElement>} onScroll={onScroll}>
         <div className="md-viewer" dangerouslySetInnerHTML={{ __html: html }} />
       </div>

@@ -11,9 +11,9 @@ interface Props {
   onOpen: () => void;
   onSave: () => void;
   modified: boolean;
+  /** 是否已落到磁盘：决定名字后面说「已保存」还是什么都不说 */
+  hasPath: boolean;
   displayName: string;
-  words: number;
-  minutes: number;
   themeMode: "auto" | "light" | "dark";
   onToggleTheme: () => void;
   onFindReplace: () => void;
@@ -31,9 +31,8 @@ export const Toolbar = memo(function Toolbar({
   onOpen,
   onSave,
   modified,
+  hasPath,
   displayName,
-  words,
-  minutes,
   themeMode,
   onToggleTheme,
   onFindReplace,
@@ -43,6 +42,9 @@ export const Toolbar = memo(function Toolbar({
   onToggleInfo,
 }: Props) {
   useUiLang(); // 语言切换时重渲染
+  /* 状态只由真实状态驱动：有未保存改动才亮呼吸点，且旁边一定有文字。
+     静止态（无改动）只留名字，不放任何红点。 */
+  const docState = modified ? t("doc.unsaved") : hasPath ? t("doc.saved") : "";
   return (
     <header className="toolbar">
       <div className="toolbar-side">
@@ -55,65 +57,50 @@ export const Toolbar = memo(function Toolbar({
         <div className="brand">
           <img className="brand-mark" src="/favicon.png" alt="" />
           <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
-          <span className="dot-live" aria-hidden="true" />
+          <span className="brand-tagline">{t("brand.tagline")}</span>
         </div>
-        <div className={`doc-pill ${modified ? "modified" : ""}`} title={modified ? t("toolbar.unsaved") : undefined}>
-          {modified && <span className="dot" />}
+        <div
+          className={`doc-pill ${modified ? "is-unsaved" : ""}`}
+          title={modified ? t("toolbar.unsaved") : displayName}
+        >
+          {modified && <span className="dot-live" role="img" aria-label={docState} />}
           <span className="name">{displayName}</span>
+          {docState && <span className="state">{docState}</span>}
         </div>
       </div>
 
       <div className="toolbar-center">
-        <div className="view-switch">
+        {/* 分段控件用和面板里一样的词：仅编辑 / 分屏 / 仅预览。
+            aria-pressed 表达选中，视觉上是实底反白，不靠颜色单独编码。 */}
+        <div className="view-switch" role="group" aria-label={t("toolbar.viewGroup")}>
           <button
-            className={`tbar-btn ${viewMode === "editor" ? "active" : ""}`}
+            className="seg-btn"
             aria-pressed={viewMode === "editor"}
             onClick={() => onSelectView("editor")}
             title={t("toolbar.editorOnly")}
-            aria-label={t("toolbar.editorOnly")}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
-              <rect x="1" y="1" width="12" height="12" rx="2" />
-              <line x1="4" y1="4.5" x2="10" y2="4.5" strokeLinecap="round" />
-              <line x1="4" y1="7" x2="8" y2="7" strokeLinecap="round" />
-              <line x1="4" y1="9.5" x2="9" y2="9.5" strokeLinecap="round" />
-            </svg>
+            {t("toolbar.editorOnly")}
           </button>
           <button
-            className={`tbar-btn ${viewMode === "split" ? "active" : ""}`}
+            className="seg-btn"
             aria-pressed={viewMode === "split"}
             onClick={() => onSelectView("split")}
             title={t("toolbar.split")}
-            aria-label={t("toolbar.split")}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
-              <rect x="1" y="1" width="12" height="12" rx="2" />
-              <line x1="7" y1="1" x2="7" y2="13" />
-            </svg>
+            {t("toolbar.split")}
           </button>
           <button
-            className={`tbar-btn ${viewMode === "preview" ? "active" : ""}`}
+            className="seg-btn"
             aria-pressed={viewMode === "preview"}
             onClick={() => onSelectView("preview")}
             title={t("toolbar.previewOnly")}
-            aria-label={t("toolbar.previewOnly")}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
-              <rect x="1" y="1" width="12" height="12" rx="2" />
-              <polyline points="4.5,5 7,2.5 9.5,5" strokeLinecap="round" strokeLinejoin="round" />
-              <line x1="7" y1="2.5" x2="7" y2="9" strokeLinecap="round" />
-            </svg>
+            {t("toolbar.previewOnly")}
           </button>
         </div>
       </div>
 
       <div className="toolbar-actions">
-        {/* 非交互展示位：用 div 而非 button，避免"看着能点、点了没反应"（本轮 B4） */}
-        <div className="tbar-btn stat" role="status" title={t("toolbar.statAria", { n: words, m: minutes })}>
-          <span className="stat-num">{words >= 1000 ? `${(words / 1000).toFixed(1)}k` : words}</span>
-          <span className="stat-sep">/</span>
-          <span className="stat-min">{minutes}m</span>
-        </div>
         <button className="tbar-btn" onClick={onNew} title={t("toolbar.new")} aria-label={t("toolbar.new")}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
             <line x1="7.5" y1="2" x2="7.5" y2="13" />
@@ -125,12 +112,8 @@ export const Toolbar = memo(function Toolbar({
             <path d="M2 4h4l1.5 1.5H12a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
           </svg>
         </button>
-        <button
-          className={`tbar-btn ${modified ? "has-action" : ""}`}
-          onClick={onSave}
-          title={t("toolbar.save")}
-          aria-label={t("toolbar.save")}
-        >
+        {/* 未保存态已由名字旁「未保存」承载；这里不再加裸红点，避免红点单独编码状态 */}
+        <button className="tbar-btn" onClick={onSave} title={t("toolbar.save")} aria-label={t("toolbar.save")}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
             <path d="M3 1v5h8V1M3 14v-4h9v4" />
             <path d="M1 6v8h13V6" />
@@ -145,18 +128,6 @@ export const Toolbar = memo(function Toolbar({
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
             <circle cx="6.5" cy="6.5" r="4" />
             <line x1="9.5" y1="9.5" x2="13" y2="13" />
-          </svg>
-        </button>
-        <button
-          className="tbar-btn"
-          onClick={onExportPdf}
-          title={t("toolbar.exportPdf")}
-          aria-label={t("toolbar.exportPdf")}
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-            <line x1="7.5" y1="2" x2="7.5" y2="9" />
-            <polyline points="5,6.5 7.5,9 10,6.5" fill="none" />
-            <line x1="3" y1="13" x2="12" y2="13" />
           </svg>
         </button>
         {hasFrontmatter && (
@@ -197,6 +168,10 @@ export const Toolbar = memo(function Toolbar({
               <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" />
             </svg>
           )}
+        </button>
+        {/* 主操作只有一个：导出 PDF。其余动作保持图标级，不抢视线。 */}
+        <button className="export-btn" onClick={onExportPdf} title={t("toolbar.exportPdf")}>
+          {t("toolbar.export")}
         </button>
       </div>
     </header>
