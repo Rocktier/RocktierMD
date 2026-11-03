@@ -257,7 +257,9 @@ html.is-mac .toolbar {
 }
 
 .view-switch .seg-btn:hover {
-  background: var(--accent-hover);
+  /* 中性悬停只用低强度底：近不透明的 --accent-hover 会让未选中段
+     看起来像已选中（选中态是 --accent + --on-accent 实底反白）。 */
+  background: var(--accent-muted);
   color: var(--text-primary);
 }
 
@@ -544,7 +546,7 @@ html.is-mac .toolbar {
 }
 
 .toc-collapse:hover {
-  background: var(--accent-hover);
+  background: var(--accent-muted);
   color: var(--text-primary);
 }
 
