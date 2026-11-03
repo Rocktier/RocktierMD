@@ -12,6 +12,8 @@ interface Props {
   onToggleTask?: (lineNumber: number, checked: boolean) => void;
   taskLines?: number[];
   onOpenDocument?: (path: string) => void;
+  /** 只有分屏才有「源码」可同步；仅预览模式下说同滚动是假话。 */
+  scrollSync?: boolean;
 }
 
 // micromark does not emit heading ids, so apply them post-render using the
@@ -132,7 +134,7 @@ export const Preview = memo(function Preview({ html, filePath, previewRef, onScr
       <div className="pane-head">
         <b>{t("pane.preview")}</b>
         <span className="spacer" />
-        <span className="mono">{t("pane.synced")}</span>
+        {scrollSync ? <span className="mono">{t("pane.synced")}</span> : null}
       </div>
       <div className="preview-scroll" ref={ref as React.Ref<HTMLDivElement>} onScroll={onScroll}>
         <div className="md-viewer" dangerouslySetInnerHTML={{ __html: html }} />

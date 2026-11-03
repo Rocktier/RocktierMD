@@ -965,6 +965,7 @@ export default function App() {
               onToggleTask={toggleTask}
               taskLines={taskLines}
               onOpenDocument={onOpenDocument}
+              scrollSync={view === "split"}
             />
           )}
         </main>

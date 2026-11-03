@@ -17,8 +17,24 @@ const STORE_KEY = "rocktier.lang";
 const STORE_KEY_LEGACY = "rocktier-md-lang";
 
 /** ⌘ on macOS, Ctrl+ elsewhere — the shortcut hints are written with ⌘ in the dictionary. */
-const MOD_KEY =
-  typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl+";
+const IS_MAC = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
+const MOD_KEY = IS_MAC ? "⌘" : "Ctrl+";
+const SHIFT_KEY = IS_MAC ? "⇧" : "Shift+";
+
+/**
+ * 快捷键文案的平台化。
+ *
+ * 只换 ⌘ 是不够的：字典里 "导出 PDF (⌘⇧P)" 在 Windows 上会变成
+ * "Ctrl+⇧P" —— 前半换成了 Windows 写法，后半还是 macOS 字形。⇧ 一起换，
+ * 组合键要先于单键匹配，否则 "⌘⇧P" 会被拆成 "Ctrl+⇧P" 再单独换 ⇧。
+ */
+export function fmtKeys(text: string): string {
+  if (IS_MAC) return text;
+  return text
+    .replace(/⌘\s*⇧\s*/g, "Ctrl+Shift+")
+    .replace(/⌘\s*/g, MOD_KEY)
+    .replace(/⇧\s*/g, SHIFT_KEY);
+}
 
 const STRINGS = {
   en,
@@ -198,8 +214,8 @@ export function t(key: UiKey, params?: Record<string, string | number>): string 
       text = text.replaceAll(`{${k}}`, String(v));
     }
   }
-  // 快捷键文案里的 ⌘ 集中替换：Windows 上显示 Ctrl+（此前按钮提示恒为 ⌘S）
-  return text.replaceAll("⌘", MOD_KEY);
+  // 快捷键文案集中平台化：Windows 上 ⌘ → Ctrl+、⇧ → Shift+
+  return fmtKeys(text);
 }
 
 /** 订阅语言变化：语言切换时触发组件重渲染。 */

@@ -389,6 +389,13 @@ html.is-mac .toolbar {
 
 .sidebar:not(.open) {
   transform: translateX(-100%);
+  /* 只是移出屏外，仍在 Tab 序列与无障碍树里：键盘用户会 tab 进看不见的
+     侧栏。visibility 延迟到滑动结束才切，收起动画不受影响；展开时目标态
+     只声明 transform，visibility 立即恢复。 */
+  visibility: hidden;
+  transition:
+    transform var(--dur-normal) var(--ease),
+    visibility 0s linear var(--dur-normal);
 }
 
 .sidebar-overlay {

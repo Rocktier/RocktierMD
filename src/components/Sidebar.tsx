@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import type { Heading } from "../services/markdown";
-import { t, useUiLang } from "../i18n";
+import { t, fmtKeys, useUiLang } from "../i18n";
 
 interface Props {
   open: boolean;
@@ -16,8 +16,8 @@ interface Props {
   currentPath?: string | null;
 }
 
-/** 快捷键表的修饰键：写死 ⌘ 会在 Windows/Linux 上与行为（Ctrl）对不上。 */
-const MOD = /Mac/i.test(navigator.userAgent) ? "⌘" : "Ctrl";
+/* 快捷键表统一写 macOS 字形，交给 fmtKeys 按平台转写 —— 此前自己拼
+   "Ctrl" + "⇧"，Windows 上会出现 "Ctrl ⇧ S" 这种混排。 */
 
 export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, densities, onJumpTo, recent = [], onOpenRecent, currentPath }: Props) {
   const [collapsed, setCollapsed] = useState(false);
@@ -140,13 +140,13 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
           <div className="sidebar-section">
             <div className="sidebar-section-title">{t("sidebar.shortcuts")}</div>
             <div className="shortcuts">
-              <div className="row"><span className="key">{MOD} N</span><span className="desc">{t("sc.new")}</span></div>
-              <div className="row"><span className="key">{MOD} O</span><span className="desc">{t("sc.open")}</span></div>
-              <div className="row"><span className="key">{MOD} S</span><span className="desc">{t("sc.save")}</span></div>
-              <div className="row"><span className="key">{MOD} ⇧ S</span><span className="desc">{t("sc.saveAs")}</span></div>
-              <div className="row"><span className="key">{MOD} F</span><span className="desc">{t("sc.find")}</span></div>
-              <div className="row"><span className="key">{MOD} ⇧ P</span><span className="desc">{t("sc.exportPdf")}</span></div>
-              <div className="row"><span className="key">{MOD} \</span><span className="desc">{t("sc.sidebar")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ N")}</span><span className="desc">{t("sc.new")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ O")}</span><span className="desc">{t("sc.open")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ S")}</span><span className="desc">{t("sc.save")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ ⇧ S")}</span><span className="desc">{t("sc.saveAs")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ F")}</span><span className="desc">{t("sc.find")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ ⇧ P")}</span><span className="desc">{t("sc.exportPdf")}</span></div>
+              <div className="row"><span className="key">{fmtKeys("⌘ \\")}</span><span className="desc">{t("sc.sidebar")}</span></div>
               <div className="row"><span className="key">Tab</span><span className="desc">{t("sc.indent")}</span></div>
             </div>
           </div>
