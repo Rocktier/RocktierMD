@@ -55,7 +55,7 @@ function rewriteImageSources(root: HTMLElement, filePath?: string) {
   });
 }
 
-export const Preview = memo(function Preview({ html, filePath, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument }: Props) {
+export const Preview = memo(function Preview({ html, filePath, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument, scrollSync }: Props) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = previewRef || internalRef;
   useUiLang(); // 语言切换时重渲染（面板头文案）
