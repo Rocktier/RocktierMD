@@ -70,6 +70,73 @@ jobs:
         run: |
           npm ci
           npm run tauri build
+      # Tauri leaves the bundle with only the linker's ad-hoc signature, which
+      # Gatekeeper reports as "code has no resources" and blocks as malware.
+      - name: Sign the app bundle, notarize it, and repack the DMG
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          app=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          dmg=$(find src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)
+          [ -n "$app" ] && [ -n "$dmg" ] || { echo "::error::bundle output not found"; exit 1; }
+
+          sign_app=(-s -)
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            keychain="$RUNNER_TEMP/rocktier-signing.keychain-db"
+            echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "" "$keychain"
+            # 6 小时不锁：同一步里还要等 notarytool，15 分钟不活动锁会卡住后面的
+            # codesign（DMG 二次签名）。
+            security set-keychain-settings -lut 21600 "$keychain"
+            security unlock-keychain -p "" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+              -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+            security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+            identity=$(security find-identity -v -p codesigning "$keychain" \
+              | awk '/Developer ID Application/ {print $2; exit}')
+            if [ -z "$identity" ]; then
+              echo "::error::APPLE_CERT_P12 is set but contains no Developer ID Application identity."
+              exit 1
+            fi
+            echo "signing as $identity"
+            sign_app=(-s "$identity" --options runtime --timestamp --entitlements src-tauri/Entitlements.plist)
+          else
+            echo "::notice::No Developer ID certificate configured - ad-hoc signing. Downloaded copies will still be flagged by Gatekeeper."
+          fi
+
+          codesign "${sign_app[@]}" -fv --deep "$app"
+          codesign --verify --deep --strict "$app"
+          codesign -dvvv "$app" 2>&1 | grep 'Signature=' || true
+
+          work=$(mktemp -d)
+          hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" -quiet
+          mnt="$work/m"
+          mkdir -p "$mnt"
+          hdiutil attach "$work/rw.dmg" -readwrite -nobrowse -mountpoint "$mnt" -quiet
+          rm -rf "$mnt/$(basename "$app")"
+          cp -R "$app" "$mnt/"
+          hdiutil detach "$mnt" -quiet
+          hdiutil convert "$work/rw.dmg" -format UDZO -o "$work/signed.dmg" -quiet
+          mv "$work/signed.dmg" "$dmg"
+          rm -rf "$work"
+
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            codesign -s "$identity" --timestamp -fv "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          else
+            codesign -s - -fv "$dmg"
+          fi
+          codesign -dvvv "$dmg" 2>&1 | grep 'Signature=' || true
       - name: Ensure Release Exists
         run: |
           if ! gh release view ${{ inputs.release_tag || github.ref_name }} > /dev/null 2>&1; then
