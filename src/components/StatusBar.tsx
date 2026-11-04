@@ -52,7 +52,7 @@ export const StatusBar = memo(function StatusBar({
         : t("status.draft");
 
   return (
-    <footer className="status-bar">
+    <footer className="status-bar" role="status" aria-live="polite">
       <span className="status-state">
         {busy && <span className="dot-live" role="img" aria-label={stateText} />}
         <span>{stateText}</span>

@@ -822,7 +822,7 @@ html.is-mac .toolbar {
 .status-bar {
   display: flex;
   align-items: center;
-  height: 26px;
+  height: var(--statusbar-h);
   padding: 0 12px;
   background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
   border-top: 1px solid var(--border, rgba(255, 255, 255, 0.04));
