@@ -8,6 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { FindReplace } from "./components/FindReplace";
 import { StatusBar } from "./components/StatusBar";
 import { LicenseDialog } from "./components/LicenseDialog";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { licenseStatus, onLicenseExpired, isLicenseExpiredError, revalidateLicence, type LicenseInfo } from "./services/license";
 import { checkForUpdates, currentVersion, type UpdateResult, type UpdateState } from "./services/updates";
@@ -19,7 +20,7 @@ import {
   type Frontmatter,
 } from "./services/markdown";
 import {
-  openFile, saveFile, saveFileAs, confirmDialog, normalizeEol, applyEol, type Eol,
+  openFile, saveFile, saveFileAs, normalizeEol, applyEol, type Eol,
 } from "./services/file";
 import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
 
@@ -82,6 +83,23 @@ export default function App() {
      （fixed 定位不稳定，容易盖住底部内容，Compressor v0.1.10 实测复现）。 */
   const [updateOpen, setUpdateOpen] = useState(false);
   const updateChecking = useRef(false);
+
+  /* 应用内确认框（规范 v2 §7：禁止原生 ask / window.confirm）。
+     Promise 化让「等用户点一下」保持原有 `if (await …)` 的调用形态。 */
+  const [confirmReq, setConfirmReq] = useState<{
+    message: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
+  const askConfirm = useCallback(
+    (message: string) => new Promise<boolean>((resolve) => setConfirmReq({ message, resolve })),
+    []
+  );
+  const settleConfirm = useCallback((ok: boolean) => {
+    setConfirmReq((req) => {
+      req?.resolve(ok);
+      return null;
+    });
+  }, []);
   const toastRef = useRef(0);
   const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -218,8 +236,8 @@ export default function App() {
   // Guard: confirm before discarding unsaved changes (new / open / quit)
   const confirmDiscard = useCallback(async (): Promise<boolean> => {
     if (!docRef.current.modified) return true;
-    return confirmDialog(t("confirm.discard"));
-  }, []);
+    return askConfirm(t("confirm.discard"));
+  }, [askConfirm]);
 
   // Native close button: Rust blocks the close until the frontend is ready,
   // then hands the decision to the frontend (unsaved-changes check).
@@ -358,7 +376,7 @@ export default function App() {
                 message += "\n\n" + t("confirm.recoverNamedCount", { n: namedDrafts.length });
               }
             }
-            if (await confirmDialog(message)) {
+            if (await askConfirm(message)) {
               if (!cancelled) {
                 restored = {
                   path: untitled ? null : draft.path,
@@ -386,7 +404,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [rememberPath]);
+  }, [rememberPath, askConfirm]);
 
   // Toggle task checkbox: use 1-based source line number to avoid index drift.
   const toggleTask = useCallback((lineNumber: number, checked: boolean) => {
@@ -739,7 +757,7 @@ export default function App() {
         return;
       }
       // File changed on disk and differs from current doc
-      const choice = await confirmDialog(t("confirm.externalChange"));
+      const choice = await askConfirm(t("confirm.externalChange"));
       if (choice) {
         eolRef.current = eol;
         setDoc({ path, content: diskContent, modified: false });
@@ -753,7 +771,7 @@ export default function App() {
     } finally {
       checkingRef.current = false;
     }
-  }, [showToast]);
+  }, [showToast, askConfirm]);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -982,6 +1000,11 @@ export default function App() {
         license={license}
         onLicenseClick={openLicense}
       />
+      {/* 丢弃未保存更改 / 外部修改冲突 / 恢复草稿：应用内确认框。
+          规范 v2 §7 禁止原生 ask()。 */}
+      {confirmReq && (
+        <ConfirmDialog message={confirmReq.message} onResolve={settleConfirm} />
+      )}
       {/* 更新检查：入口在帮助菜单「检查更新…」，结果弹 UpdateDialog。
           右下角常驻悬浮入口已移除（fixed 定位不稳定，容易盖住底部内容）。 */}
       {updateOpen && (
