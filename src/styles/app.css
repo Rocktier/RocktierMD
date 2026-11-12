@@ -1,14 +1,105 @@
 /* ═══════════════════════════════════════════════════════════════════
    ROCKTIER MARKDOWN — App Layout & Components
-   Nothing OS family: dots, thin lines, monochrome, geometric
+
+   2026-11-12 起材质语言换到 lenso 那一套（Apple iOS 27 玻璃的 Web 实现，
+   github.com/LioRael/lenso-ui）。只借规则，不引入它的依赖。
    ═══════════════════════════════════════════════════════════════════ */
+
+/* ── LENSO 材质层 ────────────────────────────────────────────────────
+ *
+ * 三条规则（其余都是细节）：
+ *   1. 玻璃只给**浮在内容之上**的东西：侧栏抽屉、对话框、toast、查找条。
+ *      正文与预览永远是不透明的安静面 —— 文字绝不隔着毛玻璃读。
+ *   2. 玻璃不是「调透明度」一件事，是三件：半透底面 + **.5px** 内描边
+ *      （不是 1px，半像素才像玻璃边缘）+ 模糊。
+ *   3. 形状只有两档：控件胶囊 999px，容器 18px。
+ *
+ * 为什么不把这些值直接写在元素上，而要收成令牌：
+ *   家族的 contrast-gate 判据⑤要求「一切字面颜色都要有对比度论证」。
+ *   而玻璃的颜色是半透明的，判据①的「令牌 × 表面」矩阵看不见它 ——
+ *   矩阵里的表面全是不透明令牌值。所以这里把玻璃收成**产品私有令牌**
+ *   （不进母版 tokens.css），另配 scripts/verify-glass-contrast.mjs：
+ *   它按真实叠层顺序把「底 → 遮罩 → 玻璃 → 文字」合成后算对比度，
+ *   对每一档取纯白/纯黑两个极端底，并带正反对照自检。
+ *   CSS 里因此不再出现裸的半透明颜色。
+ *
+ * 与设计稿的一处偏离（已写进台账）：
+ *   窗口是不透明的（tauri.conf 未开 transparent / vibrancy），背后没有
+ *   桌面可折射，所以 chrome 的 alpha 比 lenso 原值（.92→.78）更高。
+ *   过度透明在这里换不到玻璃感，只会把底色洗淡。
+ *
+ * 取值口径：
+ *   chrome 贴边工具条 / 标签栏 / 状态条；panel 侧栏与对话框；
+ *   pill 状态条与分段控件；raise 抬起来的那一枚（选中项、活动标签）。
+ *   浮在**任意内容**之上（预览里可以是一张照片）的面，alpha 必须
+ *   ≥ .90：否则浅色档配深色照片、深色档配白底扫描件时，文字会掉到
+ *   3:1 以下。这道红线由 verify-glass-contrast.mjs 守。
+ * ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* 画布 / 页面 / chrome 三级明度：玻璃要「读得出来」，前提是它压的
+     那一层不是同一个明度。浅色档沿用 macOS 惯例（灰画布 + 白纸）。 */
+  --canvas: #050507;
+  --pane-bg: #121215;
+  --glass-chrome-a: #1c1c20;
+  --glass-chrome-b: #18181c;
+  /* 深色档的 panel 比设计稿暗一档（lenso 原值是 rgba(58,58,64,…)）。
+     原因是 --danger #ff4a3d 出现在对话框里（吊销通告 / 激活失败）：
+     压在 48 上面的合成对比只有 3.75:1，压到 30 附近才回到 4.5 以上。
+     「玻璃好看」不能拿错误提示的可读性去换 —— verify-glass 会拦。 */
+  --glass-panel-a: rgba(30, 30, 35, 0.96);
+  --glass-panel-b: rgba(24, 24, 28, 0.95);
+  --glass-drawer-a: rgba(46, 46, 53, 0.87);
+  --glass-drawer-b: rgba(34, 34, 40, 0.84);
+  --glass-float-a: rgba(28, 28, 32, 0.95);
+  --glass-float-b: rgba(24, 24, 28, 0.93);
+  --glass-pill-a: rgba(255, 255, 255, 0.10);
+  --glass-pill-b: rgba(255, 255, 255, 0.05);
+  --glass-track: rgba(120, 120, 128, 0.20);
+  --glass-raise-a: rgba(255, 255, 255, 0.16);
+  --glass-raise-b: rgba(255, 255, 255, 0.09);
+  --glass-hairline: rgba(255, 255, 255, 0.10);
+  --glass-hairline-strong: rgba(255, 255, 255, 0.14);
+  --glass-sheen: rgba(255, 255, 255, 0.06);
+  --glass-blur: 50px;
+  --glass-saturate: 160%;
+  --glass-radius: 18px;
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.40);
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="light"] {
+  --canvas: #e6e6eb;
+  --pane-bg: #ffffff;
+  --glass-chrome-a: #f5f5f7;
+  --glass-chrome-b: #f0f0f3;
+  --glass-panel-a: rgba(255, 255, 255, 0.96);
+  --glass-panel-b: rgba(250, 250, 252, 0.94);
+  --glass-drawer-a: rgba(255, 255, 255, 0.90);
+  --glass-drawer-b: rgba(251, 251, 253, 0.87);
+  --glass-float-a: rgba(255, 255, 255, 0.96);
+  --glass-float-b: rgba(250, 250, 252, 0.94);
+  --glass-pill-a: rgba(255, 255, 255, 0.86);
+  --glass-pill-b: rgba(255, 255, 255, 0.66);
+  --glass-track: rgba(120, 120, 128, 0.13);
+  --glass-raise-a: rgba(255, 255, 255, 0.98);
+  --glass-raise-b: rgba(255, 255, 255, 0.90);
+  --glass-hairline: rgba(0, 0, 0, 0.10);
+  --glass-hairline-strong: rgba(0, 0, 0, 0.14);
+  --glass-sheen: rgba(255, 255, 255, 0.70);
+  --glass-blur: 25px;
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --scrim: rgba(0, 0, 0, 0.40);
+}
 
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  background: var(--bg-primary);
+  background: var(--canvas);
   overflow: hidden;
   position: relative;
 }
@@ -17,6 +108,8 @@
   display: flex;
   flex: 1;
   overflow: hidden;
+  /* 面板与窗口边缘之间留出画布，卡片才「浮」得起来 */
+  padding: 0 12px 10px;
 }
 
 .toolbar {
@@ -25,14 +118,16 @@
   justify-content: space-between;
   height: var(--toolbar-h);
   padding: 0 12px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+  border-bottom: none;
   position: relative;
   z-index: 20;
   flex-shrink: 0;
   gap: 12px;
-  transition: background-color var(--dur-normal) var(--ease),
-             border-color var(--dur-normal) var(--ease);
+  /* 半像素内描边 = 玻璃边缘；比 1px 实线更像材质而不是边框 */
+  box-shadow: inset 0 -1px 0 var(--glass-hairline-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* The 70px offset exists to clear the macOS traffic lights in the Overlay
@@ -134,8 +229,10 @@ html.is-mac .toolbar {
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
-  background: var(--accent-muted);
-  border: 1px solid var(--border);
+  /* 文件名胶囊：一枚压在最底层玻璃（chrome）上的小玻璃 */
+  background: linear-gradient(180deg, var(--glass-pill-a) 0%, var(--glass-pill-b) 100%);
+  border: none;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -172,7 +269,8 @@ html.is-mac .toolbar {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-sm);
+  /* 图标按钮 = 胶囊（设计稿 .icon-btn 30px 圆形） */
+  border-radius: var(--radius-pill);
   color: var(--text-tertiary);
   position: relative;
   overflow: hidden;
@@ -201,19 +299,20 @@ html.is-mac .toolbar {
 
 .tbar-btn.active {
   color: var(--text-primary);
-  background: var(--accent-muted);
-  border: 1px solid var(--border-mid);
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
 }
 
-/* ── 主操作按钮：导出 PDF（设计稿 07 顶栏唯一的 primary）──────────────
+/* ── 主操作按钮：导出 PDF（设计稿 .primary-btn）──────────────────────
    实底反白用家族单色 accent（深色白底黑字 / 浅色黑底白字），
-   不占用品牌红 —— 红只作状态点（家族常量 1）。 */
+   不占用品牌红 —— 红只作状态点（家族常量 1）。胶囊形状 + 顶部高光，
+   是 lenso 里「唯一一枚实心控件」的处理。 */
 .export-btn {
-  height: 28px;
-  padding: 0 12px;
+  height: 29px;
+  padding: 0 15px;
   margin-left: 4px;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 12px;
@@ -221,35 +320,37 @@ html.is-mac .toolbar {
   white-space: nowrap;
   cursor: pointer;
   flex: none;
+  box-shadow: inset 0 1px 0 var(--glass-sheen);
   transition: background-color var(--dur-state) var(--ease),
-              border-color var(--dur-state) var(--ease);
+              opacity var(--dur-state) var(--ease);
 }
 
 .export-btn:hover {
   background: var(--accent-hover);
-  border-color: var(--accent-hover);
 }
 
-/* ── 视图切换：分段控件（设计稿 07 顶栏 seg）─────────────────────────
-   三个词与面板一致：仅编辑 / 分屏 / 仅预览。选中态实底反白
-   （aria-pressed 驱动，不靠颜色单独编码）。 */
+/* ── 视图切换：iOS 分段控件 ─────────────────────────────────────────
+   三个词与面板一致：仅编辑 / 分屏 / 仅预览。选中项是「抬起来的那一枚」
+   —— 轨道压暗、选中项提亮并带投影。aria-pressed 同时向读屏表达选中，
+   视觉之外还有第二通道。 */
 .view-switch {
   display: flex;
-  background: var(--accent-muted);
-  border: 1px solid var(--border);
+  background: var(--glass-track);
+  border: none;
   border-radius: var(--radius-pill);
-  padding: 2px;
-  gap: 1px;
+  padding: 3px;
+  gap: 2px;
 }
 
 .view-switch .seg-btn {
-  height: 24px;
-  padding: 0 10px;
+  height: 23px;
+  padding: 0 12px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-secondary);
   font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color var(--dur-state) var(--ease),
@@ -257,29 +358,25 @@ html.is-mac .toolbar {
 }
 
 .view-switch .seg-btn:hover {
-  /* 中性悬停只用低强度底：近不透明的 --accent-hover 会让未选中段
-     看起来像已选中（选中态是 --accent + --on-accent 实底反白）。 */
-  background: var(--accent-muted);
   color: var(--text-primary);
 }
 
 .view-switch .seg-btn[aria-pressed="true"] {
-  /* 选中 = 实底反白（成对令牌 --accent/--on-accent），不只靠颜色，
-     aria-pressed 同时向读屏表达选中。 */
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 500;
+  background: linear-gradient(180deg, var(--glass-raise-a) 0%, var(--glass-raise-b) 100%);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
 }
 
-/* ── 面板头：源码 / 预览栏顶部的标签行（设计稿 07 .pane-head）──────── */
+/* ── 面板头：源码 / 预览栏顶部的标签行 ───────────────────────────── */
 .pane-head {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 30px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--glass-hairline);
+  background: transparent;
   font-size: 11px;
   color: var(--text-tertiary);
   flex: none;
@@ -307,15 +404,21 @@ html.is-mac .toolbar {
   flex: 1;
   overflow: hidden;
   position: relative;
+  gap: 12px;
 }
 
+/* 两个面板是不透明的安静面（--pane-bg）：
+   正文与预览的文字绝不隔着毛玻璃读，这是 lenso 的第一条规则。 */
 .editor-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 200px;
   position: relative;
-  border-right: 1px solid var(--border);
+  background: var(--pane-bg);
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  overflow: hidden;
 }
 
 .preview-pane {
@@ -324,18 +427,10 @@ html.is-mac .toolbar {
   flex-direction: column;
   min-width: 200px;
   position: relative;
-  background: var(--bg-surface);
-}
-
-.editor-pane::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: -1px;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, var(--border-strong), transparent);
-  z-index: 1;
+  background: var(--pane-bg);
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  overflow: hidden;
 }
 
 .editor-scroll {
@@ -374,23 +469,36 @@ html.is-mac .toolbar {
   overflow-y: auto;
 }
 
+/* ── 侧栏：浮在内容之上的玻璃抽屉 ──────────────────────────────
+   四条边都内缩 8px、18px 圆角 —— 它是一块「浮起来的板」，而不是贴在
+   窗口边缘的一条栏。顶部从工具栏下方开始，为的是不盖住 macOS 的
+   红黄绿三键（此前 top:0 时抽屉一打开就把它们压住了）。
+   抽屉背后的内容由 .sidebar-overlay 的遮罩压暗，所以这里的 alpha
+   可以比「浮在正文上」的 toast 低一档：底已经被限定住了。 */
 .sidebar {
   position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
+  top: calc(var(--toolbar-h) + 8px);
+  left: 8px;
+  bottom: calc(var(--statusbar-h) + 22px);
   width: var(--sidebar-w);
-  background: var(--bg-surface);
-  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--glass-drawer-a) 0%, var(--glass-drawer-b) 100%);
+  border-radius: var(--glass-radius);
+  border-right: none;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   transform: translateX(0);
   transition: transform var(--dur-normal) var(--ease);
   z-index: 30;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .sidebar:not(.open) {
-  transform: translateX(-100%);
+  /* 100% 之外还要多推 8px：抽屉左边内缩了 8px，只推 100% 会留下一条
+     8px 的竖边露在窗口边上。 */
+  transform: translateX(calc(-100% - 8px));
   /* 只是移出屏外，仍在 Tab 序列与无障碍树里：键盘用户会 tab 进看不见的
      侧栏。visibility 延迟到滑动结束才切，收起动画不受影响；展开时目标态
      只声明 transform，visibility 立即恢复。 */
@@ -403,18 +511,20 @@ html.is-mac .toolbar {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  /* 遮罩值走 --scrim：玻璃的成像依赖它，两档必须一起调（verify-glass 会算） */
+  background: var(--scrim);
   z-index: 25;
   backdrop-filter: blur(2px);
 }
 
+/* 抽屉自己的头：高度不再等于工具栏（它已经不在工具栏上了），只留一行标题 */
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  height: var(--toolbar-h);
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--glass-hairline);
+  height: auto;
 }
 
 .sidebar-title {
@@ -681,19 +791,25 @@ html.is-mac .toolbar {
 
 /* ── Toast ──────────────────────────────────────────────────────── */
 
+/* ── Toast：浮在正文之上的玻璃 ──────────────────────────────────────
+   它是唯一「压在任意内容上、又没有遮罩托底」的浮层 —— 预览里可能是一张
+   照片，也可能是白底扫描件。所以 --glass-float-* 的 alpha 定在 .93 以上，
+   由 verify-glass-contrast.mjs 对白底/黑底两个极端验算。 */
 .toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 52px;
   left: 50%;
   transform: translateX(-50%);
   padding: 8px 18px;
-  background: var(--bg-floating);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: 14px;
   font-size: 12px;
   color: var(--text-secondary);
   z-index: 50;
-  box-shadow: var(--glow-md);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   animation: toastIn 0.2s var(--ease);
 }
 
@@ -703,19 +819,42 @@ html.is-mac .toolbar {
 }
 
 /* 语气分级（家族铁律 7：保存成功与保存失败必须视觉可区分）。
-   此前两者共用 .toast，2 秒后一起消失 —— 用户会把「保存失败」误读成「已保存」。
-   左边条 + 文字色双编码，不靠单一颜色传递语义（铁律 2）。 */
+   玻璃圆角里放不下「左边条」—— 3px 直边会被圆角切成一段弧，看着像坏了。
+   改成**彩色圆点 + 底色染色**双编码：点为形状/色相，底为强度，
+   两者都不依赖单一颜色（铁律 2）。info 不给点：中性提示不需要语气。 */
+.toast--success::before,
+.toast--error::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: 1px;
+  flex: none;
+}
+
 .toast--success {
-  border-color: color-mix(in srgb, var(--success) 45%, transparent);
-  border-left: 3px solid var(--success);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--success) 12%, var(--glass-float-a)) 0%,
+    color-mix(in srgb, var(--success) 8%, var(--glass-float-b)) 100%
+  );
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
   color: var(--text-primary);
 }
+.toast--success::before { background: var(--success); }
+
 .toast--error {
-  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
-  border-left: 3px solid var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, var(--bg-floating));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 14%, var(--glass-float-a)) 0%,
+    color-mix(in srgb, var(--danger) 10%, var(--glass-float-b)) 100%
+  );
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
   color: var(--text-primary);
 }
+.toast--error::before { background: var(--danger); }
 
 /* 自述先让位：窄窗口下文件名比口号重要 */
 @media (max-width: 1040px) {
@@ -728,10 +867,7 @@ html.is-mac .toolbar {
   .editor-container {
     flex-direction: column;
   }
-  .editor-pane {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
+  /* 竖排时两块面板之间靠 gap 分隔，不再需要一条边线 */
   .toolbar-center {
     display: none;
   }
@@ -746,17 +882,19 @@ html.is-mac .toolbar {
 
 .frontmatter-panel {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 8px;
+  right: 8px;
   width: 260px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--bg-floating);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-md, 8px);
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
   padding: 14px 16px;
   z-index: 50;
-  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   font-size: 13px;
   color: var(--text-secondary);
   animation: slideIn var(--dur-normal) var(--ease);
@@ -819,13 +957,22 @@ html.is-mac .toolbar {
    Status Bar
    ═══════════════════════════════════════════════════════════════════ */
 
+/* ── 状态栏：浮起来的玻璃胶囊 ──────────────────────────────────────
+   仍在 flex 流里（margin 让它离底边与左右各留一点），因此**不覆盖正文**
+   —— 上一版设想的「bottom:0 悬浮盖住末行」在这里不成立，也就没有
+   「末行被遮」的补偿留白问题。 */
 .status-bar {
   display: flex;
   align-items: center;
-  height: var(--statusbar-h);
-  padding: 0 12px;
-  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.04));
+  height: 30px;
+  margin: 0 12px 10px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--glass-pill-a) 0%, var(--glass-pill-b) 100%);
+  border-top: none;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   font-size: 11px;
   color: var(--text-tertiary);
   gap: 16px;
@@ -836,7 +983,7 @@ html.is-mac .toolbar {
 .status-bar .sep {
   width: 1px;
   height: 12px;
-  background: var(--border, rgba(255, 255, 255, 0.06));
+  background: var(--glass-hairline);
 }
 
 /* ── 状态栏内容（设计稿 07 .statusbar）────────────────────────────
@@ -920,13 +1067,18 @@ html.is-mac .toolbar {
 /* ============ FindReplace 工具条（自 FindReplace.tsx 抽离，2026-09-26 UI 评审） ============ */
 .find-replace-bar {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  /* 内缩成一条浮在文档上的玻璃条，而不是贴着面板顶边的通栏 */
+  top: 8px;
+  left: 8px;
+  right: 8px;
   z-index: 5;
-  background: var(--bg-floating, #141414);
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
-  padding: 6px 10px;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border-bottom: none;
+  border-radius: 14px;
+  padding: 8px 10px;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow-pill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   font: inherit;
 }
 
@@ -1048,7 +1200,7 @@ html.is-mac .toolbar {
 .license-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   z-index: 60;
   display: flex;
   align-items: center;
@@ -1056,15 +1208,19 @@ html.is-mac .toolbar {
   backdrop-filter: blur(2px);
 }
 
+/* 模态玻璃：背后有 --scrim 托底，底被限定住了，所以可以比 toast 透一点。
+   18px 圆角 + 半像素描边，lenso 里的「浮层」就是这一档。 */
 .license-dialog {
   width: min(440px, calc(100vw - 48px));
   max-height: min(80vh, 560px);
   overflow-y: auto;
-  background: var(--bg-floating);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-md, 8px);
-  box-shadow: var(--glow-md);
-  padding: 16px 18px;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  padding: 18px 20px;
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -1123,10 +1279,10 @@ html.is-mac .toolbar {
 }
 
 .license-field input {
-  padding: 7px 10px;
+  padding: 7px 12px;
   background: var(--bg-primary, rgba(0, 0, 0, 0.3));
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: 10px;
   font: inherit;
   color: var(--text-primary);
 }
@@ -1149,9 +1305,9 @@ html.is-mac .toolbar {
 .license-footer-spacer { flex: 1; }
 
 .license-footer button {
-  padding: 6px 14px;
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-sm, 6px);
+  padding: 6px 15px;
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: var(--radius-pill);
   font: inherit;
   font-size: 12px;
   color: var(--text-primary);
@@ -1182,7 +1338,7 @@ html.is-mac .toolbar {
 .update-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   z-index: 60;
   display: flex;
   align-items: center;
@@ -1194,11 +1350,13 @@ html.is-mac .toolbar {
   width: min(440px, calc(100vw - 48px));
   max-height: min(80vh, 560px);
   overflow-y: auto;
-  background: var(--bg-floating);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-md, 8px);
-  box-shadow: var(--glow-md);
-  padding: 16px 18px;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  padding: 18px 20px;
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -1246,9 +1404,9 @@ html.is-mac .toolbar {
 .update-footer-spacer { flex: 1; }
 
 .update-footer button {
-  padding: 6px 14px;
-  border: 1px solid var(--border-mid);
-  border-radius: 8px;
+  padding: 6px 15px;
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: var(--radius-pill);
   font-family: inherit;
   font-size: 12px;
   color: var(--text-primary);
@@ -1268,35 +1426,32 @@ html.is-mac .toolbar {
 /* 确认框正文：恢复草稿 / 外部修改的提示带 \n\n 分段，必须保留换行。 */
 .confirm-message { white-space: pre-line; }
 
-/* ── 浅色档三栏分隔增强（2026-10-25 审计 D-78）──────────────────
-   #f5f5f5 侧栏/预览 vs #fff 编辑区的表面差，叠 0.08 发丝线，
-   浅色下肉眼难辨，区域边界靠猜。浅色把两条栏界提到 --border-hover
-   一档；深色对比已足够，不动。 */
-[data-theme="light"] .sidebar,
-[data-theme="light"] .editor-pane {
-  border-right-color: var(--border-hover);
-}
+/* ── 面板边界（2026-10-25 审计 D-78 的后续）──────────────────────
+   那时靠把 border-right 提到 --border-hover 来分辨三栏。现在面板改成了
+   浮在灰画布上的白卡片（浅色档 --canvas #f0f0f3 / --pane-bg #ffffff），
+   边界由**明度差 + 半像素描边**表达，不再需要这条补丁。
+   留一行说明，免得后来者照着旧注释去加边框。 */
 
-/* ── 标签栏 ───────────────────────────────────────────────────────
-   只在 ≥2 张标签时渲染（单文档时它是噪音）。高度低于工具栏一档，
-   视觉上属于「文档区」而非「应用 chrome」：底色比工具栏更暗一阶，
-   活动标签用内容区底色 + 顶部一条 1px 高亮，与下面的编辑区连成一片。 */
+/* ── 标签栏：玻璃胶囊条（原来是一条贴边通栏 + 方角标签）──────────────
+   只在 ≥2 张标签时渲染（单文档时它是噪音）。标签做成一枚枚胶囊，
+   活动标签是「抬起来的那一枚」：提亮 + 投影 + 半像素描边。 */
 .tabbar {
   display: flex;
-  align-items: stretch;
-  gap: 2px;
-  height: 34px;
-  padding: 0 8px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px 8px;
+  background: var(--glass-chrome-b);
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--glass-hairline);
   flex-shrink: 0;
   overflow: hidden;
 }
 
 .tabbar-strip {
   display: flex;
-  align-items: stretch;
-  gap: 2px;
+  align-items: center;
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
   flex: 1;
@@ -1308,10 +1463,13 @@ html.is-mac .toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
+  height: 27px;
   max-width: 200px;
   min-width: 92px;
   padding: 0 6px 0 12px;
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  border-radius: var(--radius-pill);
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
   color: var(--text-tertiary);
   font-size: 12px;
   cursor: pointer;
@@ -1320,19 +1478,13 @@ html.is-mac .toolbar {
   transition: background-color var(--dur-hover) var(--ease),
               color var(--dur-hover) var(--ease);
 }
-.tab:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
+.tab:hover { color: var(--text-secondary); }
 
 .tab--active {
-  background: var(--bg-primary);
+  background: linear-gradient(180deg, var(--glass-raise-a) 0%, var(--glass-raise-b) 100%);
   color: var(--text-primary);
-}
-/* 活动标签压住栏底那条分隔线，让它和编辑区连成一体 */
-.tab--active::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: -1px;
-  height: 1px;
-  background: var(--bg-primary);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow-pill);
 }
 
 .tab-label {
@@ -1360,7 +1512,7 @@ html.is-mac .toolbar {
   height: 18px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -1373,20 +1525,22 @@ html.is-mac .toolbar {
 .tab:hover .tab-close,
 .tab--active .tab-close,
 .tab-close:focus-visible { opacity: 1; }
-.tab-close:hover { background: var(--bg-card-hover); }
+.tab-close:hover { background: var(--accent-muted); }
 
 .tabbar-new {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: 27px;
+  height: 27px;
   border: 0;
-  background: transparent;
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
   transition: color var(--dur-hover) var(--ease),
               background-color var(--dur-hover) var(--ease);
 }
-.tabbar-new:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.tabbar-new:hover { color: var(--text-primary); background: var(--accent-muted); }
