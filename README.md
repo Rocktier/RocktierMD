@@ -18,7 +18,18 @@ A **fast**, elegant Markdown reader and editor. Part of the [Rocktier](https://r
 - **Clean & elegant** — Nothing OS-inspired monochrome design, light and dark
 - **By Rocktier** — member of the Rocktier family (Rocktier PDF, Rocktier CAD Viewer,
   Rocktier pic2webp, Rocktier OCR)
-- **Privacy first** — 100% offline: no network access, no cloud, no tracking
+- **Privacy first** — your documents never leave your device, and writing,
+  reading and exporting work fully offline. The direct-download build makes
+  exactly three **user-initiated** requests, none at startup or in the background:
+  - `POST https://rocktier.com/api/activate` — when you enter a license code
+    (sends the code, a device fingerprint for the activation limit, and the OS name)
+  - `GET https://api.github.com/repos/Rocktier/RocktierMD/releases/latest` —
+    when you click "Check for updates" (a plain GET; no body, query or custom fields)
+  - `GET https://rocktier.com/api/revalidate?txn=...` — on that same click, only
+    if a receipt exists; sends only its transaction id, so a refunded licence
+    can be deactivated locally
+
+  No telemetry, no cloud storage. Full request list: https://rocktier.com/privacy
 
 ## Architecture
 
