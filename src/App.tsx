@@ -10,6 +10,7 @@ import { StatusBar } from "./components/StatusBar";
 import { LicenseDialog } from "./components/LicenseDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { TabBar } from "./components/TabBar";
 import { licenseStatus, onLicenseExpired, isLicenseExpiredError, revalidateLicence, type LicenseInfo } from "./services/license";
 import { checkForUpdates, currentVersion, type UpdateResult, type UpdateState } from "./services/updates";
 import { useTheme } from "./hooks/useTheme";
@@ -20,12 +21,24 @@ import {
   type Frontmatter,
 } from "./services/markdown";
 import {
-  openFile, saveFile, saveFileAs, normalizeEol, applyEol, type Eol,
+  openFile, saveFile, saveFileAs, saveHtmlAs, normalizeEol, applyEol, type Eol,
 } from "./services/file";
+import { buildStandaloneHtml, inlineLocalImages } from "./services/exportHtml";
+import {
+  MAX_TABS, activeTabOf, closeTab, createTab, openTab, tabLabel, updateTabDoc,
+  type DocumentTab,
+} from "./services/tabs";
 import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
 
 /** toast 语气。error 必须同时改变配色、存活时长与 aria role（家族铁律 7）。 */
 type ToastTone = "info" | "success" | "error";
+
+/** 一份文档各自的保存基线，按标签 id 存放（多标签下不再是全局单例）。 */
+interface TabMeta {
+  eol: Eol;
+  savedContent: string;
+  savedPath: string | null;
+}
 import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
@@ -54,11 +67,61 @@ export default function App() {
   // 在切换语言后立即重渲染，避免半新半旧（复审 F9）。
   const lang = useUiLang();
 
-  const [doc, setDoc] = useState<MarkdownDocument>({
+  /* 多标签：文档不再是一个 state，而是一组标签 + 一个活动 id。
+     `doc` 依旧按「当前文档」暴露给下面近千行的既有逻辑（编辑器、预览、状态栏、
+     外部变更检测全都读它），所以改动集中在这一层，而不是散到每个消费点。
+     纯逻辑（开/关/切换/上限）在 services/tabs.ts，有单测钉住。 */
+  const [tabs, setTabs] = useState<DocumentTab[]>(() => [createTab({
     path: null,
     content: WELCOME_DOCUMENT,
     modified: false,
-  });
+  })]);
+  const [activeId, setActiveId] = useState(() => tabs[0].id);
+  const activeIdRef = useRef(activeId);
+  const activeTab = activeTabOf(tabs, activeId);
+  const doc = activeTab.doc;
+
+  /* 每份文档各自的「保存基线」与换行风格，按标签 id 存放。
+     这些值曾经是三个全局 ref —— 多标签下那样会让 A 文档的基线跟着 B 文档走，
+     于是外部修改检测会把磁盘旧内容判成「被外部改过」，或反过来把真实的外部
+     修改吞掉。这里换成按标签存取，但**保持 `.current` 的读写形态**，
+     调用点（保存、另存、外部检测、草稿恢复）一行都不用改。 */
+  const tabMetaRef = useRef(new Map<string, TabMeta>([
+    [tabs[0].id, { eol: "\n", savedContent: WELCOME_DOCUMENT, savedPath: null }],
+  ]));
+  const metaOf = useCallback((id: string): TabMeta => {
+    let m = tabMetaRef.current.get(id);
+    if (!m) {
+      m = { eol: "\n", savedContent: "", savedPath: null };
+      tabMetaRef.current.set(id, m);
+    }
+    return m;
+  }, []);
+  const eolRef = { get current() { return metaOf(activeIdRef.current).eol; },
+                   set current(v: Eol) { metaOf(activeIdRef.current).eol = v; } };
+  const lastSavedContentRef = { get current() { return metaOf(activeIdRef.current).savedContent; },
+                                set current(v: string) { metaOf(activeIdRef.current).savedContent = v; } };
+  const lastPathRef = { get current() { return metaOf(activeIdRef.current).savedPath; },
+                        set current(v: string | null) { metaOf(activeIdRef.current).savedPath = v; } };
+
+  /** 只改活动标签的文档 —— 与原来的 setDoc 同签名，支持函数式更新。 */
+  const setDoc = useCallback((patch: MarkdownDocument | ((d: MarkdownDocument) => MarkdownDocument)) => {
+    setTabs((ts) => updateTabDoc(ts, activeIdRef.current, patch));
+  }, []);
+
+  /* activeIdRef 必须在切换的那一刻同步更新：保存、起草稿、外部变更检测都在
+     同一个 tick 里读它，等 effect 追上来就已经写到上一个标签上了。 */
+  const switchTo = useCallback((id: string) => {
+    activeIdRef.current = id;
+    setActiveId(id);
+  }, []);
+
+  /* 标签数组的镜像。开/关标签要基于「最新」的数组算，而 setState 的 updater
+     是异步执行的；helper 内部每次算完都同步回写，连续两次操作也不会读到旧值。 */
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   const [view, setView] = useState<ViewMode>("split");
   const [sidebar, setSidebar] = useState(false);
@@ -105,15 +168,9 @@ export default function App() {
   const previewRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const docRef = useRef(doc);
-  const lastSavedContentRef = useRef(doc.content);
   // 新建文档在首次保存前的恢复 key（合成路径，磁盘上不存在）
   const UNTITLED_KEY = "__untitled__";
-  // 基线所属的文件路径：文档切换时基线必须跟着换（外部修改检测依赖它）
-  const lastPathRef = useRef<string | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 文档原始换行风格：读取时记录、保存时还原。textarea 会把 CRLF 归一成 LF，
-  // 不还原就会在首次编辑后把整份文件的换行改写。
-  const eolRef = useRef<Eol>("\n");
 
   // 草稿是"尚未落盘的内容"的唯一副本，只在这些时刻清除：
   // 内容已成功写盘、或用户明确选择丢弃/不恢复。
@@ -122,11 +179,6 @@ export default function App() {
     invoke("clear_recovery", { path: key }).catch(() => {});
   }, []);
 
-  // 切换文档前清掉上一个文档的草稿（调用点都在"用户已确认丢弃"之后）
-  const clearPreviousDrafts = useCallback(() => {
-    clearRecovery(docRef.current.path);
-    if (docRef.current.modified || !docRef.current.path) clearRecovery(UNTITLED_KEY);
-  }, [clearRecovery, UNTITLED_KEY]);
   const externalCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { onEditorScroll, onPreviewScroll } = useScrollSync(editorRef, previewRef);
 
@@ -233,10 +285,14 @@ export default function App() {
     setDoc((d) => ({ ...d, content, modified: true }));
   }, []);
 
-  // Guard: confirm before discarding unsaved changes (new / open / quit)
+  /* 关窗前的丢弃确认。多标签下必须看**所有**标签：只查当前标签的话，
+     后台那张改过没保存的文档会随着关窗静默消失（草稿虽在，但用户以为存了）。 */
   const confirmDiscard = useCallback(async (): Promise<boolean> => {
-    if (!docRef.current.modified) return true;
-    return askConfirm(t("confirm.discard"));
+    const dirty = tabsRef.current.filter((tb) => tb.doc.modified);
+    if (dirty.length === 0) return true;
+    return askConfirm(
+      dirty.length === 1 ? t("confirm.discard") : t("confirm.discardMany", { n: dirty.length }),
+    );
   }, [askConfirm]);
 
   // Native close button: Rust blocks the close until the frontend is ready,
@@ -437,19 +493,36 @@ export default function App() {
     }
   }, []);
 
-  const doOpen = useCallback(async () => {
-    if (!(await confirmDiscard())) return;
-    const r = await openFile();
-    if (r) {
-      clearPreviousDrafts();
-      eolRef.current = r.eol;
-      lastSavedContentRef.current = r.content;
-      lastPathRef.current = r.path;
-      setDoc({ path: r.path, content: r.content, modified: false });
-      rememberPath(r.path);
-      showToast(t("toast.fileOpened"), "success");
+  /* 打开一份文档到标签栏。
+     规则：活动标签还是一张没动过的空白页时，直接把它换成这份文档 —— 否则每
+     打开一个文件就多留一张空白标签，几次之后就全是垃圾标签。 */
+  const openInTab = useCallback((next: MarkdownDocument, meta: TabMeta): boolean => {
+    const cur = activeTabOf(tabsRef.current, activeIdRef.current);
+    const pristine = !cur.doc.path && !cur.doc.modified;
+    const r = pristine
+      ? { tabs: updateTabDoc(tabsRef.current, cur.id, next), activeId: cur.id, reused: false, limited: false }
+      : openTab(tabsRef.current, activeIdRef.current, next);
+    if (r.limited) {
+      showToast(t("toast.tabLimit", { n: MAX_TABS }), "error");
+      return false;
     }
-  }, [confirmDiscard, showToast, rememberPath, clearPreviousDrafts]);
+    if (!r.reused) tabMetaRef.current.set(r.activeId, meta);
+    tabsRef.current = r.tabs;
+    setTabs(r.tabs);
+    switchTo(r.activeId);
+    return true;
+  }, [showToast, switchTo]);
+
+  const doOpen = useCallback(async () => {
+    const r = await openFile();
+    if (!r) return;
+    openInTab(
+      { path: r.path, content: r.content, modified: false },
+      { eol: r.eol, savedContent: r.content, savedPath: r.path },
+    );
+    rememberPath(r.path);
+    showToast(t("toast.fileOpened"), "success");
+  }, [openInTab, showToast, rememberPath]);
 
   const doSave = useCallback(async () => {
     const { path, content } = docRef.current;
@@ -503,13 +576,35 @@ export default function App() {
     }
   }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
-  const doNew = useCallback(async () => {
-    if (!(await confirmDiscard())) return;
-    clearPreviousDrafts();
-    eolRef.current = "\n";
-    setDoc({ path: null, content: "", modified: false });
+  /* 新建＝开一张新标签。不再需要「先确认丢弃」：原来的文档留在它自己的标签里，
+     什么都没被覆盖。 */
+  const doNew = useCallback(() => {
+    openInTab(
+      { path: null, content: "", modified: false },
+      { eol: "\n", savedContent: "", savedPath: null },
+    );
     showToast(t("toast.newDoc"), "success");
-  }, [confirmDiscard, showToast, clearPreviousDrafts]);
+  }, [openInTab, showToast]);
+
+  /* 关标签。改过的先问 —— 关掉就是丢弃，所以连恢复草稿一起清，否则下次启动
+     会把这份「用户已经明确不要了」的内容当成崩溃草稿弹回来。 */
+  const doCloseTab = useCallback(async (id: string) => {
+    const tab = tabsRef.current.find((tb) => tb.id === id);
+    if (!tab) return;
+    if (tab.doc.modified) {
+      const name = tabLabel(tab, t("doc.untitled"));
+      if (!(await askConfirm(t("confirm.closeDirty", { name })))) return;
+      clearRecovery(tab.doc.path);
+      if (!tab.doc.path) clearRecovery(UNTITLED_KEY);
+    }
+    const r = closeTab(tabsRef.current, activeIdRef.current, id, {
+      path: null, content: "", modified: false,
+    });
+    tabMetaRef.current.delete(id);
+    tabsRef.current = r.tabs;
+    setTabs(r.tabs);
+    switchTo(r.activeId);
+  }, [askConfirm, clearRecovery, switchTo, UNTITLED_KEY]);
 
   // 查找替换依赖编辑器 textarea（原生 undo 栈），preview-only 下它未挂载，
   // next/replace 会静默 no-op。所有入口（工具栏按钮 / ⌘F / 原生菜单）统一走这里：
@@ -550,6 +645,29 @@ export default function App() {
     if (wasEditor) setView("editor");
   }, [view, openLicense]);
 
+  /** 单文件 HTML 导出：样式与本地图片都内联，脱离本应用、断网也能打开。
+   *  与 PDF 导出一样走 save_document，因此受同一道授权闸门约束。 */
+  const doExportHtml = useCallback(async () => {
+    const current = docRef.current;
+    try {
+      const rendered = parseDocument(current.content).html;
+      const { html, skipped } = await inlineLocalImages(rendered, current.path);
+      const title = current.path ? baseName(current.path) : t("doc.untitled");
+      const standalone = buildStandaloneHtml({
+        title,
+        bodyHtml: html,
+        skippedImages: skipped,
+        lang: lang === "zh" ? "zh" : "en",
+      });
+      const defaultName = `${title.replace(/\.[^./\\]+$/, "")}.html`;
+      const saved = await saveHtmlAs(standalone, defaultName);
+      if (saved) showToast(t("toast.htmlExported"), "success");
+    } catch (e) {
+      if (isLicenseExpiredError(e)) openLicense();
+      else showToast(t("toast.htmlFailed"), "error");
+    }
+  }, [lang, showToast, openLicense]);
+
   // 菜单事件 → 现有动作链（未保存守卫 / toast 都在前端，这里只做转发）
   useEffect(() => {
     if (!isTauri) return;
@@ -564,6 +682,7 @@ export default function App() {
           case "save-as": doSaveAs(); break;
           case "find": toggleFindReplace(); break;
           case "export-pdf": doExportPdf(); break;
+          case "export-html": doExportHtml(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": cycleTheme(); break;
           case "license": openLicense(); break;
@@ -580,7 +699,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, toggleFindReplace, openLicense, runUpdateCheck]);
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, doExportHtml, toggleFindReplace, openLicense, runUpdateCheck]);
 
   const shortcuts = useMemo(
     () => ({
@@ -613,18 +732,16 @@ export default function App() {
       showToast(t("toast.unsupportedType"), "error");
       return false;
     }
-    if (!(await confirmDiscard())) return false;
     try {
       if (!(await exists(path))) {
         showToast(t("toast.fileNotExists"), "error");
         return false;
       }
       const { content, eol } = normalizeEol(await readTextFile(path));
-      clearPreviousDrafts();
-      eolRef.current = eol;
-      lastSavedContentRef.current = content;
-      lastPathRef.current = path;
-      setDoc({ path, content, modified: false });
+      openInTab(
+        { path, content, modified: false },
+        { eol, savedContent: content, savedPath: path },
+      );
       rememberPath(path);
       showToast(t("toast.fileOpened"), "success");
       return true;
@@ -632,7 +749,7 @@ export default function App() {
       showToast(t("toast.cannotReadFile"), "error");
       return false;
     }
-  }, [confirmDiscard, rememberPath, showToast, clearPreviousDrafts]);
+  }, [openInTab, rememberPath, showToast]);
 
   // Drag-and-drop file open (browser dev fallback; desktop uses onDragDropEvent)
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -644,17 +761,19 @@ export default function App() {
       showToast(t("toast.unsupportedType"), "error");
       return;
     }
-    if (!(await confirmDiscard())) return;
     try {
       const { content, eol } = normalizeEol(await (file as any).text());
-      eolRef.current = eol;
-      setDoc({ path: (file as any).path ?? null, content, modified: false });
-      if ((file as any).path) rememberPath((file as any).path);
+      const droppedPath = (file as any).path ?? null;
+      openInTab(
+        { path: droppedPath, content, modified: false },
+        { eol, savedContent: content, savedPath: droppedPath },
+      );
+      if (droppedPath) rememberPath(droppedPath);
       showToast(t("toast.fileOpened"), "success");
     } catch {
       showToast(t("toast.cannotReadFile"), "error");
     }
-  }, [confirmDiscard, rememberPath, showToast]);
+  }, [openInTab, rememberPath, showToast]);
 
   // Desktop drag & drop (Tauri v2 native event; works in the packaged app)
   useEffect(() => {
@@ -915,9 +1034,17 @@ export default function App() {
         onToggleTheme={cycleTheme}
         onFindReplace={toggleFindReplace}
         onExportPdf={doExportPdf}
+        onExportHtml={doExportHtml}
         hasFrontmatter={hasFrontmatter}
         frontmatterOpen={frontmatterOpen}
         onToggleInfo={() => setFrontmatterOpen((v) => !v)}
+      />
+      <TabBar
+        tabs={tabs}
+        activeId={activeId}
+        onSelect={switchTo}
+        onClose={doCloseTab}
+        onNew={doNew}
       />
       <div
         className="app-body"

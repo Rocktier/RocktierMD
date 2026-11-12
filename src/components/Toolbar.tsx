@@ -18,6 +18,7 @@ interface Props {
   onToggleTheme: () => void;
   onFindReplace: () => void;
   onExportPdf: () => void;
+  onExportHtml: () => void;
   hasFrontmatter: boolean;
   frontmatterOpen: boolean;
   onToggleInfo: () => void;
@@ -37,6 +38,7 @@ export const Toolbar = memo(function Toolbar({
   onToggleTheme,
   onFindReplace,
   onExportPdf,
+  onExportHtml,
   hasFrontmatter,
   frontmatterOpen,
   onToggleInfo,
@@ -169,7 +171,15 @@ export const Toolbar = memo(function Toolbar({
             </svg>
           )}
         </button>
-        {/* 主操作只有一个：导出 PDF。其余动作保持图标级，不抢视线。 */}
+        {/* 主操作是导出 PDF，图标级的 HTML 导出与它并列：两者都是「把文档
+            交给别人」，不抢主按钮的视线，但也不该藏进二级菜单里。 */}
+        <button className="tbar-btn" onClick={onExportHtml} title={t("toolbar.exportHtml")} aria-label={t("toolbar.exportHtml")}>
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3.5 1.5h6l3 3v9h-9z" />
+            <path d="M9.5 1.5v3h3" />
+            <path d="M6.5 7.5 5.5 9l1 1.5M8.5 7.5 9.5 9l-1 1.5" />
+          </svg>
+        </button>
         <button className="export-btn" onClick={onExportPdf} title={t("toolbar.exportPdf")}>
           {t("toolbar.export")}
         </button>

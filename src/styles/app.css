@@ -1276,3 +1276,117 @@ html.is-mac .toolbar {
 [data-theme="light"] .editor-pane {
   border-right-color: var(--border-hover);
 }
+
+/* ── 标签栏 ───────────────────────────────────────────────────────
+   只在 ≥2 张标签时渲染（单文档时它是噪音）。高度低于工具栏一档，
+   视觉上属于「文档区」而非「应用 chrome」：底色比工具栏更暗一阶，
+   活动标签用内容区底色 + 顶部一条 1px 高亮，与下面的编辑区连成一片。 */
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 34px;
+  padding: 0 8px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tabbar-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+.tabbar-strip::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  min-width: 92px;
+  padding: 0 6px 0 12px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease);
+}
+.tab:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
+
+.tab--active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+/* 活动标签压住栏底那条分隔线，让它和编辑区连成一体 */
+.tab--active::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: var(--bg-primary);
+}
+
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 未保存标记：一个小实心点。颜色不用红 —— 未保存是常态，不是错误。 */
+.tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity var(--dur-hover) var(--ease),
+              background-color var(--dur-hover) var(--ease);
+}
+/* 关闭按钮只在悬停活动标签时出现；但键盘聚焦时必须可见，否则无法操作 */
+.tab:hover .tab-close,
+.tab--active .tab-close,
+.tab-close:focus-visible { opacity: 1; }
+.tab-close:hover { background: var(--bg-card-hover); }
+
+.tabbar-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: color var(--dur-hover) var(--ease),
+              background-color var(--dur-hover) var(--ease);
+}
+.tabbar-new:hover { color: var(--text-primary); background: var(--bg-card-hover); }

@@ -496,6 +496,15 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         true,
         Some("CmdOrCtrl+Shift+P"),
     )?;
+    // 单文件 HTML 导出不设快捷键：⌘⇧P 已被 PDF 占用，而两者都不该
+    // 因为「顺手加一个组合键」在将来撞上系统快捷键。
+    let export_html_i = MenuItem::with_id(
+        app,
+        "export-html",
+        m.export_html,
+        true,
+        None::<&str>,
+    )?;
 
     let app_menu = Submenu::with_items(
         app,
@@ -535,6 +544,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             &save_as_i,
             &PredefinedMenuItem::separator(app)?,
             &export_i,
+            &export_html_i,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::close_window(app, None)?,
         ],
@@ -595,12 +605,16 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     // 检查更新：只 emit "check-updates"，联网由前端 services/updates.ts 做 ——
     // 应用启动时不检查，只有用户点这里或右下角的版本号才发那一次请求。
     let update_i = MenuItem::with_id(app, "check-updates", m.check_updates, true, None::<&str>)?;
-    let help_menu = Submenu::with_items(
-        app,
-        m.help,
-        true,
-        &[&update_i, &license_i, &site_i, &mail_i],
-    )?;
+    /* 商店版（ROCKTIER_CHANNEL=store）不给出「检查更新」与「授权」：更新由 App Store
+       负责，收款与授权由 Apple 负责，自研付费墙在 license::enforced() 里也已关掉。
+       这两项是直发轨仅有的两个联网触发点（D-133），留着就等于商店版仍可能由用户
+       点出一次请求，还会带出与 3.1.1 冲突的激活对话框。
+       官网与反馈保留：Help 菜单是应用内唯一的反馈入口，官网 /feedback 页正指向它。 */
+    let help_menu = if crate::license::channel() == "direct" {
+        Submenu::with_items(app, m.help, true, &[&update_i, &license_i, &site_i, &mail_i])?
+    } else {
+        Submenu::with_items(app, m.help, true, &[&site_i, &mail_i])?
+    };
 
     let menu = Menu::with_items(
         app,
@@ -626,6 +640,7 @@ struct MenuStrings {
     save: &'static str,
     save_as: &'static str,
     export_pdf: &'static str,
+    export_html: &'static str,
     file: &'static str,
     edit: &'static str,
     find: &'static str,
@@ -649,7 +664,8 @@ impl MenuStrings {
         match code {
             "zh" => Self {
                 new: "新建", open: "打开…", save: "保存", save_as: "另存为…",
-                export_pdf: "导出 PDF…", file: "文件", edit: "编辑",
+                export_pdf: "导出 PDF…",
+                export_html: "导出单文件 HTML…", file: "文件", edit: "编辑",
                 find: "查找替换", view: "显示", toggle_sidebar: "切换侧栏",
                 toggle_theme: "切换日夜模式", window: "窗口", help: "帮助",
                 website: "官方网站", feedback: "反馈",
@@ -657,7 +673,8 @@ impl MenuStrings {
             },
             "ja" => Self {
                 new: "新規", open: "開く…", save: "保存", save_as: "名前を付けて保存…",
-                export_pdf: "PDF を書き出し…", file: "ファイル", edit: "編集",
+                export_pdf: "PDF を書き出し…",
+                export_html: "単一ファイル HTML を書き出し…", file: "ファイル", edit: "編集",
                 find: "検索・置換", view: "表示", toggle_sidebar: "サイドバーの切り替え",
                 toggle_theme: "テーマを切り替え", window: "ウインドウ", help: "ヘルプ",
                 website: "公式サイト", feedback: "フィードバック",
@@ -665,7 +682,8 @@ impl MenuStrings {
             },
             "ko" => Self {
                 new: "새로 만들기", open: "열기…", save: "저장", save_as: "다른 이름으로 저장…",
-                export_pdf: "PDF 내보내기…", file: "파일", edit: "편집",
+                export_pdf: "PDF 내보내기…",
+                export_html: "단일 파일 HTML 내보내기…", file: "파일", edit: "편집",
                 find: "찾기 및 바꾸기", view: "보기", toggle_sidebar: "사이드바 전환",
                 toggle_theme: "테마 전환", window: "창", help: "도움말",
                 website: "공식 웹사이트", feedback: "피드백",
@@ -673,7 +691,8 @@ impl MenuStrings {
             },
             "de" => Self {
                 new: "Neu", open: "Öffnen…", save: "Speichern", save_as: "Speichern unter…",
-                export_pdf: "Als PDF exportieren…", file: "Datei", edit: "Bearbeiten",
+                export_pdf: "Als PDF exportieren…",
+                export_html: "Als eigenständige HTML exportieren…", file: "Datei", edit: "Bearbeiten",
                 find: "Suchen & Ersetzen", view: "Ansicht", toggle_sidebar: "Seitenleiste umschalten",
                 toggle_theme: "Design wechseln", window: "Fenster", help: "Hilfe",
                 website: "Website", feedback: "Feedback",
@@ -681,7 +700,8 @@ impl MenuStrings {
             },
             "es" => Self {
                 new: "Nuevo", open: "Abrir…", save: "Guardar", save_as: "Guardar como…",
-                export_pdf: "Exportar a PDF…", file: "Archivo", edit: "Editar",
+                export_pdf: "Exportar a PDF…",
+                export_html: "Exportar HTML independiente…", file: "Archivo", edit: "Editar",
                 find: "Buscar y reemplazar", view: "Ver", toggle_sidebar: "Alternar barra lateral",
                 toggle_theme: "Cambiar tema", window: "Ventana", help: "Ayuda",
                 website: "Sitio web", feedback: "Comentarios",
@@ -689,7 +709,8 @@ impl MenuStrings {
             },
             "pt" => Self {
                 new: "Novo", open: "Abrir…", save: "Salvar", save_as: "Salvar como…",
-                export_pdf: "Exportar para PDF…", file: "Arquivo", edit: "Editar",
+                export_pdf: "Exportar para PDF…",
+                export_html: "Exportar HTML autónomo…", file: "Arquivo", edit: "Editar",
                 find: "Localizar e substituir", view: "Exibir", toggle_sidebar: "Alternar barra lateral",
                 toggle_theme: "Alternar tema", window: "Janela", help: "Ajuda",
                 website: "Site", feedback: "Comentários",
@@ -697,7 +718,8 @@ impl MenuStrings {
             },
             "ar" => Self {
                 new: "جديد", open: "فتح…", save: "حفظ", save_as: "حفظ باسم…",
-                export_pdf: "تصدير PDF…", file: "ملف", edit: "تحرير",
+                export_pdf: "تصدير PDF…",
+                export_html: "تصدير HTML مستقل…", file: "ملف", edit: "تحرير",
                 find: "بحث واستبدال", view: "عرض", toggle_sidebar: "تبديل الشريط الجانبي",
                 toggle_theme: "تبديل المظهر", window: "نافذة", help: "مساعدة",
                 website: "الموقع", feedback: "ملاحظات",
@@ -706,7 +728,8 @@ impl MenuStrings {
             // English is both the family default and the fallback.
             _ => Self {
                 new: "New", open: "Open…", save: "Save", save_as: "Save As…",
-                export_pdf: "Export PDF…", file: "File", edit: "Edit",
+                export_pdf: "Export PDF…",
+                export_html: "Export Standalone HTML…", file: "File", edit: "Edit",
                 find: "Find & Replace", view: "View", toggle_sidebar: "Toggle Sidebar",
                 toggle_theme: "Toggle Theme", window: "Window", help: "Help",
                 website: "Website", feedback: "Feedback",

@@ -1,7 +1,8 @@
 # Field Notes: Offline-First Software
 
-A short document used for the Store screenshots. It exercises everything the
-editor renders: headings, lists, tables, code and math.
+Notes from a week of building software without a network connection. One plain
+.md file, opened by double-clicking it, with headings, tables, code and math
+rendered in place.
 
 ## Why offline first
 
@@ -13,7 +14,7 @@ underneath your work.
 
 ## The writing surface
 
-The editor splits into two panes. The left one is the document itself — plain
+The editor splits into two panes. The left one is the document itself: plain
 text, nothing hidden. The right one is what it will look like.
 
 - [x] Live preview that keeps up with typing
@@ -56,5 +57,6 @@ the current line and column sit in the status bar.
 
 ### Export
 
-HTML for the web, PDF through the system print dialog. Both start from the same
-rendered document you see on screen, so what you hand over is what you wrote.
+A standalone HTML file with styles and local images embedded, or PDF through
+the system print dialog. Both start from the same rendered document you see on
+screen, so what you hand over is what you wrote.

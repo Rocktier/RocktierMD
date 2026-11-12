@@ -79,3 +79,24 @@ export async function saveFileAs(content: string, defaultName?: string): Promise
   await writeAtomic(path, content);
   return path;
 }
+
+const HTML_EXTENSIONS = [
+  { name: "HTML", extensions: ["html", "htm"] },
+  { name: "All Files", extensions: ["*"] },
+];
+
+/**
+ * 单文件 HTML 导出。与 saveFileAs 共用同一条原子写 + 授权闸门，
+ * 只是另存对话框给出 .html 过滤器，避免用户拿到一份叫 Untitled.md 的网页。
+ */
+export async function saveHtmlAs(content: string, defaultName?: string): Promise<string | null> {
+  const path = await dialogSave({
+    filters: HTML_EXTENSIONS,
+    defaultPath: defaultName || "Untitled.html",
+  });
+
+  if (!path) return null;
+
+  await writeAtomic(path, content);
+  return path;
+}
