@@ -138,13 +138,21 @@ const ROLES = [
     id: "drawer",
     label: "侧栏抽屉（遮罩托底，无危险色文本）",
     layers: ["--glass-drawer-a", "--glass-drawer-b"],
-    backdrops: ["scrim:white", "scrim:black"],
-    tokens: ["--text-primary", "--text-secondary", "--text-tertiary"],
-    /* 11% 是「能分辨背后有东西在动」的门槛。实测旧值 5.8% —— 用户看着
-       就是一块实心板，这才是「lenso 没效果」的主诉来源。
-       浅色档给 15%：它的遮罩本来就轻（.40 vs .55），白玻璃变灰对黑字
-       更有利，没理由跟着深色档一起保守。 */
-    minSeeThrough: { dark: 0.11, light: 0.14 },
+    backdrops: ["scrim-drawer:white", "scrim-drawer:black"],
+    /* 2026-11-13 起抽屉**不再有 tertiary 文字**，这是本档能透到 20% 的前提。
+       tertiary 在「白底扫描件」这个最坏底上只剩 3.4-3.6:1，而抽屉里用它的
+       全是 10-13px 小字 —— 小字恰恰最吃对比度。当时的两个选项是「把玻璃退回
+       实色板」或「把抽屉的弱化层级收一档」，选了后者：标题 primary、
+       其余小字 secondary，层次交给字号与字重。
+       ⚠️ 这个令牌列表不是「挑好算的填」，是抽屉里**实际**出现的颜色：
+       下面的 drawerTextAudit() 会扫 app.css，任何 .sidebar* / .toc* /
+       .shortcuts* / .rail* 规则里再写回 color: var(--text-tertiary) 直接判红，
+       否则本判据会因为列表过时而假绿（D-39 形状）。 */
+    tokens: ["--text-primary", "--text-secondary"],
+    /* 深色档 20%：遮罩 --scrim-drawer 从 .55 降到 .20，见透率 11.7% → 20.8%。
+       浅色档 19%：它的遮罩是 .15，见透 20.4%；浅色档在 .10–.55 之间对比度
+       恒为 4.53:1（卡的是玻璃不是遮罩），所以没必要替深色档保守。 */
+    minSeeThrough: { dark: 0.20, light: 0.19 },
   },
   {
     id: "panel",
@@ -205,11 +213,14 @@ function resolveBackdrops(tokens, name, depth = 0) {
   if (depth > 4) return [];
   if (name === "white") return [{ label: "纯白内容", rgb: WHITE }];
   if (name === "black") return [{ label: "纯黑内容", rgb: BLACK }];
-  if (name.startsWith("scrim:")) {
-    const scrim = parseColor(tokens.get("--scrim"));
+  /* scrim:xxx → --scrim（模态遮罩）；scrim-drawer:xxx → --scrim-drawer（抽屉遮罩）。
+     2026-11-13 两档分开：抽屉常驻可开可关，不该跟对话框共用「熄灯」那一档。 */
+  const sm = /^scrim(-[a-z]+)?:(.+)$/.exec(name);
+  if (sm) {
+    const scrim = parseColor(tokens.get(`--scrim${sm[1] ?? ""}`));
     if (!scrim) return [];
-    return resolveBackdrops(tokens, name.slice(6), depth + 1).map((b) => ({
-      label: `遮罩叠${b.label}`,
+    return resolveBackdrops(tokens, sm[2], depth + 1).map((b) => ({
+      label: `${sm[1] ? "抽屉遮罩" : "遮罩"}叠${b.label}`,
       rgb: over(scrim, b.rgb),
     }));
   }
@@ -245,8 +256,9 @@ function checkTheme(theme, tokens, opts = {}) {
         continue;
       }
       /* 遮罩在本层之下：它吃掉多少，玻璃就少透多少。这是串联透射 */
-      const scrimA = bd.startsWith("scrim:")
-        ? (parseColor(tokens.get("--scrim"))?.a ?? null)
+      const sm = /^scrim(-[a-z]+)?:/.exec(bd);
+      const scrimA = sm
+        ? (parseColor(tokens.get(`--scrim${sm[1] ?? ""}`))?.a ?? null)
         : null;
       let worstSee = Infinity;
       let worstNeed = null;
@@ -324,7 +336,31 @@ function checkTheme(theme, tokens, opts = {}) {
   return { failures, rows };
 }
 
-/* ---------- 主流程 ---------- */
+/* ---------- 抽屉文字令牌「现实核对」 ----------
+
+   上面 drawer 的 tokens 是手写的列表。手写列表和 CSS 会分叉：某天有人给
+   .toc-item 加回 tertiary，判据照样全绿，因为判据只算列表里的那几个。
+   这就是 D-39 的形状（判据盯的不是现实，是它自己的假设）。
+   所以反过来扫一遍源码：抽屉作用域内**不许**出现 color: var(--text-tertiary)。
+   只扫 color 声明，不扫 background —— 密度条（.toc-item .density i）是 3px
+   装饰条，用 tertiary 当填充是有意的弱化，不是文字。 */
+
+const DRAWER_SCOPE = /(^|[\s,>])(\.sidebar[a-z-]*|\.toc[a-z-]*|\.shortcuts|\.rail-[a-z]+)([\s.:,>{]|$)/;
+
+function drawerTextAudit(cssText) {
+  const violations = [];
+  const clean = stripComments(cssText);
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(clean))) {
+    const selector = m[1].trim();
+    const body = m[2];
+    if (!DRAWER_SCOPE.test(selector)) continue;
+    if (!/(^|[;\s])color:\s*var\(--text-tertiary\)/.test(body)) continue;
+    violations.push(selector.replace(/\s+/g, " "));
+  }
+  return violations;
+}
 
 const themes = { dark: merged("dark"), light: merged("light") };
 let failures = 0;
@@ -359,6 +395,16 @@ for (const theme of ["dark", "light"]) {
 
 /* ---------- 正反对照：两端都要能红 ---------- */
 
+const drawerViolations = drawerTextAudit(readFileSync(APP_CSS, "utf8"));
+if (drawerViolations.length) {
+  failures += drawerViolations.length;
+  lines.push(`\n抽屉文字令牌：❌ ${drawerViolations.length} 处仍用 --text-tertiary`);
+  for (const s of drawerViolations) lines.push(`  ❌ ${s}`);
+  lines.push("    抽屉见透 20%+ 时它只有 3.4-3.6:1；要么改 secondary，要么把玻璃退回实色板。");
+} else {
+  lines.push("\n抽屉文字令牌：✅ 作用域内无 --text-tertiary（与上方 tokens 列表一致）");
+}
+
 if (process.argv.includes("--selftest")) {
   const weak = { n: 0 };
   const thick = { n: 0 };
@@ -378,6 +424,19 @@ if (process.argv.includes("--selftest")) {
   );
   if (weak.n === 0) failures++;
   if (thick.n === 0) failures++;
+
+  /* 正反对照 ③：抽屉文字扫描器自身 —— 造一条违规必须扫得到，
+     再造一条「装饰条用 background」必须扫不到（误报会让判据被绕过）。 */
+  const bad = drawerTextAudit(".toc-item { color: var(--text-tertiary); }").length;
+  const ok = drawerTextAudit(".toc-item .density i { background: var(--text-tertiary); }").length;
+  const okOther = drawerTextAudit(".toast .desc { color: var(--text-tertiary); }").length;
+  const scanOk = bad === 1 && ok === 0 && okOther === 0;
+  lines.push(
+    `\n正反对照 ③：抽屉文字扫描器 → 违规样本${bad === 1 ? "命中" : "漏"}、` +
+      `装饰条${ok === 0 ? "不误报" : "误报"}、抽屉外${okOther === 0 ? "不误报" : "误报"}` +
+      (scanOk ? " ✅" : " ❌")
+  );
+  if (!scanOk) failures++;
 }
 
 console.log(lines.join("\n"));

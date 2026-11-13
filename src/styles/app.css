@@ -91,7 +91,15 @@
   /* 画布变黑之后浮层要更重的影子才「抬得起来」（原来的 .55 在黑底上读不出） */
   --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.68);
   --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.40);
+  /* 模态遮罩：点击才出现、几秒就关，压暗本身就是「现在该看这个」的交互语言，
+     与玻璃是否透没有关系，保持 .55 不动。 */
   --scrim: rgba(0, 0, 0, 0.55);
+  /* 抽屉遮罩：常驻可开可关的侧栏不是模态，压到 .55 等于把整屏熄灯，
+     用户看的是「抽屉浮在文档上」，不是「文档被停用」。2026-11-13 起两档分开
+     （原来共用一个 --scrim）。见透率 (1-.20)×(1-.74) = 20.8%。
+     约束不在遮罩本身，在文字：抽屉里所有文字都提到 --text-secondary 之后，
+     深色档 4.56:1 才撑得住这个透度 —— 详见 verify-glass-contrast.mjs。 */
+  --scrim-drawer: rgba(0, 0, 0, 0.20);
 }
 
 [data-theme="light"] {
@@ -124,6 +132,10 @@
   --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.20);
   --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.10);
   --scrim: rgba(0, 0, 0, 0.40);
+  /* 浅色档同理两档分开。.15 而不是跟深色档一样的 .20：白玻璃 + 黑字对透度
+     远没那么敏感（实测 .10 到 .55 之间对比度恒为 4.53:1，卡的是玻璃不是遮罩），
+     没理由让浅色档替深色档保守。 */
+  --scrim-drawer: rgba(0, 0, 0, 0.15);
 }
 
 .app-shell {
@@ -543,8 +555,9 @@ html.is-mac .toolbar {
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  /* 遮罩值走 --scrim：玻璃的成像依赖它，两档必须一起调（verify-glass 会算） */
-  background: var(--scrim);
+  /* 遮罩值走 --scrim-drawer：玻璃的成像依赖它，两档必须一起调（verify-glass 会算）。
+     抽屉不是模态，不用 --scrim —— 那个是给对话框「熄灯」用的。 */
+  background: var(--scrim-drawer);
   z-index: 25;
   backdrop-filter: blur(2px);
 }
@@ -577,7 +590,13 @@ html.is-mac .toolbar {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  /* 抽屉里不再出现 --text-tertiary（2026-11-13）。它不是审美选择：
+     见透率提到 20%+ 之后，tertiary 在「白底扫描件」这种最坏底上只剩
+     3.4-3.6:1，而这几处都是 10-11px 的小字 —— 小字正是最需要对比度的地方。
+     与其把整个玻璃退回实色板，不如把抽屉的弱化层级收一档：
+     标题用 primary，其余小字用 secondary。verify-glass 会扫本文件，
+     任何 .sidebar* 规则再写回 tertiary 直接判红。 */
+  color: var(--text-primary);
 }
 
 .sidebar-close {
@@ -588,7 +607,7 @@ html.is-mac .toolbar {
   justify-content: center;
   border-radius: var(--radius-sm);
   font-size: 16px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .sidebar-close:hover {
@@ -618,7 +637,9 @@ html.is-mac .toolbar {
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  /* tertiary → secondary，理由同 .sidebar-title：10px 小字 + 20% 见透的玻璃
+     这一对组合过不了 4.5:1。上层层次留给字号与字重去表达。 */
+  color: var(--text-secondary);
   padding: 0 8px;
 }
 
@@ -724,7 +745,7 @@ html.is-mac .toolbar {
 .toc-empty {
   margin: 0;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   user-select: none;
 }
 
@@ -744,7 +765,7 @@ html.is-mac .toolbar {
 .shortcuts .key {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   background: var(--accent-muted);
@@ -752,7 +773,7 @@ html.is-mac .toolbar {
 }
 
 .shortcuts .desc {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 /* ── Table of Contents (TOC) ────────────────────────────────────── */
@@ -772,7 +793,7 @@ html.is-mac .toolbar {
   font-size: 12.5px;
   padding: 5px 8px;
   border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
