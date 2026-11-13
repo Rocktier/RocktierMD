@@ -549,6 +549,19 @@ html.is-mac .toolbar {
   backdrop-filter: blur(2px);
 }
 
+/* 抽屉打开时正文栏不再居中，让它跑到抽屉底下。
+   为什么（findings D-146）：.md-viewer 是居中定宽 720，1200pt 窗口下栏左边界
+   落在 240pt，而抽屉右边界是 238pt —— 差 2pt。于是抽屉永远只压在空留白上，
+   backdrop-filter 背后没有内容可糊，玻璃在真机上看着就是一块实色板。
+   这就是「lenso 没效果」的真因，与 alpha / blur 参数无关。
+   左对齐后文字落到抽屉底下，玻璃才有东西可透。
+   只过渡 margin：抽屉是浮层，内容移位要跟着动画走，不能瞬跳。 */
+.app-shell.drawer-open .md-viewer {
+  margin-left: 0;
+  margin-right: auto;
+  transition: margin-left var(--dur-normal) var(--ease);
+}
+
 /* 抽屉自己的头：高度不再等于工具栏（它已经不在工具栏上了），只留一行标题 */
 .sidebar-header {
   display: flex;

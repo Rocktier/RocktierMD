@@ -1027,7 +1027,7 @@ export default function App() {
   const viewClass = view === "preview" ? "view-preview" : "";
 
   return (
-    <div className={`app-shell ${viewClass}`}>
+    <div className={`app-shell ${viewClass} ${sidebar ? "drawer-open" : ""}`}>
       <Toolbar
         viewMode={view}
         onSelectView={setView}
