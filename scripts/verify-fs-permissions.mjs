@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Rocktier Markdown · fs 插件权限对账判据
+/* Rocktier · fs 插件权限对账判据（家族通用版）
  *
  * 用法:
  *   node scripts/verify-fs-permissions.mjs              主检查（真实仓）
@@ -9,8 +9,12 @@
  *   Tauri v2 的 fs 插件是「一命令一权限」：代码里 `import { readFile }` 只让
  *   TS 编译通过，真正能不能调还要 capabilities 里授权。没授权时不是编译错误，
  *   而是运行时被 ACL 拒掉 —— 若调用点还包着 try/catch（"一张图读不到不该让
- *   整份导出失败"），就变成**静默功能缺失**，测试全绿、界面正常、产物不对。
- *   v1.0.21 的导出 HTML 不内联本地图正是这条路径（findings D-140 / D-142）。
+ *   整份导出失败"、"文件不存在就当没更新"），就变成**静默功能缺失**：
+ *   测试全绿、界面正常、产物不对。
+ *   已中招两例：
+ *     - MD 1.0.21 导出 HTML 不内联本地图（readFile 无授权，D-140 / D-142）
+ *     - MD/Write 草稿恢复告警恒说「草稿更新」（stat 无授权 → catch 吞掉，
+ *       stale 恒 false → 用户点恢复就用旧草稿盖掉磁盘新内容，D-142）
  *
  * 特别提醒 `fs:default`：
  *   它**不**涵盖任何具体文件 API。实测 `default_permission.permissions` 只有
@@ -27,6 +31,16 @@ import { join, dirname, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** 仓名从 tauri.conf.json 读，家族各仓直接复用本脚本、无需改文案。 */
+function productName(root) {
+  try {
+    const conf = JSON.parse(readFileSync(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
+    return conf.productName ?? "Rocktier";
+  } catch {
+    return "Rocktier";
+  }
+}
 
 /** 插件 API → 需要的 permission。只列本仓可能用的读/写族，未知 API 单独报「未登记」。 */
 const REQUIRED = {
@@ -154,6 +168,18 @@ function selftest() {
       expectRed: true,
     },
     {
+      name: "stat 只给了 read-text-file → 必须判红（Write/MD 草稿告警那条）",
+      hits: [{ file: "src/App.tsx", api: "stat" }],
+      ids: ["fs:default", "fs:allow-read-text-file", "fs:allow-write-text-file", "fs:allow-exists"],
+      expectRed: true,
+    },
+    {
+      name: "补上 fs:allow-stat → 必须判绿",
+      hits: [{ file: "src/App.tsx", api: "stat" }],
+      ids: ["fs:default", "fs:allow-read-text-file", "fs:allow-stat"],
+      expectRed: false,
+    },
+    {
       name: "完全不用 fs → 不该误报",
       hits: [],
       ids: [],
@@ -174,7 +200,7 @@ function selftest() {
 }
 
 const results = audit(collectImports(ROOT), grantedIds(ROOT));
-console.log("\n══════ Rocktier Markdown · fs 权限对账判据 ══════");
+console.log(`\n══════ ${productName(ROOT)} · fs 权限对账判据 ══════`);
 for (const r of results) console.log(`  ${r.ok ? "✅" : "❌"} ${r.id.padEnd(18)} ${r.detail}`);
 const mainOk = results.every((r) => r.ok);
 console.log(`\n  主检查: ${results.filter((r) => r.ok).length}/${results.length} 通过`);
