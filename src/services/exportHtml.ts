@@ -82,11 +82,29 @@ export interface InlineResult {
   skipped: string[];
 }
 
+/** 便于测试注入的两项能力。生产环境走默认值。 */
+export interface InlineDeps {
+  /** 读文件字节；默认是 fs 插件的 readFile（需要 capabilities 里的 fs:allow-read-file）。 */
+  readFile?: (path: string) => Promise<Uint8Array>;
+  /** 是否允许读磁盘；默认看运行时是不是 Tauri。 */
+  canReadDisk?: boolean;
+}
+
 /**
  * 把渲染结果里的本地图片换成 data URI。
  * 非 Tauri（浏览器 dev / 单元测试）下不读磁盘，原样返回并如实标记跳过。
+ *
+ * 注意：`canReadDisk` 为真时能不能真的读到，还取决于 capabilities 有没有授
+ * `fs:allow-read-file`。v1.0.21 就是这里被 ACL 拒、异常进了下面的 catch，
+ * 于是「导出成功但图片没内联」（findings D-140）。
  */
-export async function inlineLocalImages(bodyHtml: string, filePath: string | null): Promise<InlineResult> {
+export async function inlineLocalImages(
+  bodyHtml: string,
+  filePath: string | null,
+  deps: InlineDeps = {},
+): Promise<InlineResult> {
+  const read = deps.readFile ?? readFile;
+  const canReadDisk = deps.canReadDisk ?? isTauri;
   const doc = new DOMParser().parseFromString(`<div id="root">${bodyHtml}</div>`, "text/html");
   const imgs = Array.from(doc.querySelectorAll<HTMLImageElement>("img[src]"));
   const skipped: string[] = [];
@@ -98,7 +116,7 @@ export async function inlineLocalImages(bodyHtml: string, filePath: string | nul
       skipped.push(src);
       continue;
     }
-    if (!filePath || !isTauri) {
+    if (!filePath || !canReadDisk) {
       skipped.push(src);
       continue;
     }
@@ -113,7 +131,7 @@ export async function inlineLocalImages(bodyHtml: string, filePath: string | nul
     try { decoded = decodeURIComponent(decoded); } catch { /* 不是百分号编码，原样用 */ }
     const absolute = resolvePath(base, decoded);
     try {
-      const bytes = await readFile(absolute);
+      const bytes = await read(absolute);
       img.setAttribute("src", `data:${mimeFor(absolute)};base64,${toBase64(bytes)}`);
     } catch {
       // 一张图读不到不该让整份导出失败；保留原路径并如实记下。

@@ -516,10 +516,13 @@ export default function App() {
   const doOpen = useCallback(async () => {
     const r = await openFile();
     if (!r) return;
-    openInTab(
+    // 达到标签上限时 openInTab 已经弹了 tabLimit（error）；不判返回值就会紧接着
+    // 弹一条"已打开"，把真正的失败盖掉 —— 用户只看到成功、界面没变（D-141/T7）。
+    if (!openInTab(
       { path: r.path, content: r.content, modified: false },
       { eol: r.eol, savedContent: r.content, savedPath: r.path },
-    );
+    ))
+      return;
     rememberPath(r.path);
     showToast(t("toast.fileOpened"), "success");
   }, [openInTab, showToast, rememberPath]);
@@ -579,10 +582,13 @@ export default function App() {
   /* 新建＝开一张新标签。不再需要「先确认丢弃」：原来的文档留在它自己的标签里，
      什么都没被覆盖。 */
   const doNew = useCallback(() => {
-    openInTab(
+    // 上限时 openInTab 已弹 tabLimit（error）；这里必须提前返回，否则会把它
+    // 覆盖成绿色的 "New document"，用户以为新建成功而界面毫无变化（D-141/T7）。
+    if (!openInTab(
       { path: null, content: "", modified: false },
       { eol: "\n", savedContent: "", savedPath: null },
-    );
+    ))
+      return;
     showToast(t("toast.newDoc"), "success");
   }, [openInTab, showToast]);
 
@@ -738,10 +744,11 @@ export default function App() {
         return false;
       }
       const { content, eol } = normalizeEol(await readTextFile(path));
-      openInTab(
+      if (!openInTab(
         { path, content, modified: false },
         { eol, savedContent: content, savedPath: path },
-      );
+      ))
+        return false;
       rememberPath(path);
       showToast(t("toast.fileOpened"), "success");
       return true;
@@ -764,10 +771,11 @@ export default function App() {
     try {
       const { content, eol } = normalizeEol(await (file as any).text());
       const droppedPath = (file as any).path ?? null;
-      openInTab(
+      if (!openInTab(
         { path: droppedPath, content, modified: false },
         { eol, savedContent: content, savedPath: droppedPath },
-      );
+      ))
+        return;
       if (droppedPath) rememberPath(droppedPath);
       showToast(t("toast.fileOpened"), "success");
     } catch {

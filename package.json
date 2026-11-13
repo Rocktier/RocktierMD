@@ -1,6 +1,6 @@
 {
   "name": "rocktier-markdown",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Fast, elegant Markdown reader and editor — Rocktier family",
   "private": true,
   "type": "module",
@@ -15,7 +15,9 @@
     "tauri:build": "tauri build && rm -rf \"$HOME/Downloads/Rocktier Markdown.app\" && cp -R src-tauri/target/release/bundle/macos/*.app \"$HOME/Downloads/\" && cp -f src-tauri/target/release/bundle/dmg/*.dmg \"$HOME/Downloads/\"",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
     "family:check": "node scripts/family-check.mjs --self --product markdown",
-    "verify:glass": "node scripts/verify-glass-contrast.mjs --selftest"
+    "verify:glass": "node scripts/verify-glass-contrast.mjs --selftest",
+    "verify:fs": "node scripts/verify-fs-permissions.mjs --selftest",
+    "verify:tabs": "node scripts/verify-tab-limit.mjs --selftest"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

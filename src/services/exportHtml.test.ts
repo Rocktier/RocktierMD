@@ -88,4 +88,46 @@ describe("inlineLocalImages", () => {
     expect(result.html).toBe(body);
     expect(result.skipped).toEqual([]);
   });
+
+  // ── 以下三条钉住「真的读到了字节」那条路径 ────────────────────────────
+  // v1.0.21 的 P0：capabilities 缺 fs:allow-read-file → 运行时 readFile 抛错
+  // → 这里静默降级成「保留相对路径」，导出件看着成功其实没内联。而当时全部
+  // 单测都走上面那个「非 Tauri 直接跳过」分支，成功路径一次都没跑过（D-140）。
+  it("inlines a local image as a data URI when the bytes are readable", async () => {
+    const seen: string[] = [];
+    const result = await inlineLocalImages('<img src="./assets/local.png">', "/docs/note.md", {
+      canReadDisk: true,
+      readFile: async (p) => {
+        seen.push(p);
+        return new Uint8Array([0x41, 0x42, 0x43]); // "ABC"
+      },
+    });
+    // 传给读盘的是相对 .md 所在目录解析后的绝对路径
+    expect(seen).toEqual(["/docs/assets/local.png"]);
+    expect(result.html).toContain("data:image/png;base64,QUJD");
+    expect(result.html).not.toContain("./assets/local.png");
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("picks the MIME type from the file extension", async () => {
+    const result = await inlineLocalImages('<img src="pic.JPG">', "/docs/note.md", {
+      canReadDisk: true,
+      readFile: async () => new Uint8Array([0xff, 0xd8]),
+    });
+    expect(result.html).toContain("data:image/jpeg;base64,");
+  });
+
+  it("falls back to a plain reference and reports it when the read is denied", async () => {
+    // 权限缺失 / 文件不可读的真实形态：readFile 抛错。必须保留原路径并如实
+    // 上报，而不是产出一个「看起来成功、实际缺图」的文件。
+    const result = await inlineLocalImages('<img src="pic.png">', "/docs/note.md", {
+      canReadDisk: true,
+      readFile: async () => {
+        throw new Error("fs.read_file not allowed. Permissions: fs:allow-read-file");
+      },
+    });
+    expect(result.html).toContain('src="pic.png"');
+    expect(result.html).not.toContain("data:image");
+    expect(result.skipped).toEqual(["pic.png"]);
+  });
 });
