@@ -15,6 +15,12 @@
  *   底取纯白与纯黑两个极端：预览里可以是一张白底扫描件，也可以是一张
  *   夜空照片，玻璃必须在这两端都成立。
  *
+ * 2026-11-13 补了一道**上限**（minSeeThrough）：
+ *   原判据只守「对比度 ≥ 4.5」，于是「把 alpha 一路加到 0.99」永远全绿 ——
+ *   而屏幕上是一块实色板。实测 v1.0.21：抽屉背后内容可见度 5.8%、对话框
+ *   1.8%，用户原话「没看到很有效果」。判据必须两端夹住：够不透 → 可读性
+ *   死；够不薄 → 玻璃死。--selftest 因此有两条负对照（过薄 / 过厚）。
+ *
  * 颜色一律从 src/styles/app.css 的 --glass-* 令牌里读，不在本文件复写，
  * 否则「判据通过」和「CSS 里的值」会慢慢分叉（D-90 的老毛病）。
  *
@@ -107,7 +113,9 @@ const BLACK = [0, 0, 0];
 
 /* layers：玻璃渐变的两个止点（单止点就写一个）。
    backdrops：该表面可能压住的底。scrim 前缀表示「先盖一层 --scrim」。
-   tokens：这一层上实际会出现的文字令牌（按真实用法取，不图省事全上）。 */
+   tokens：这一层上实际会出现的文字令牌（按真实用法取，不图省事全上）。
+   minSeeThrough：背后内容至少要被看见多少（0-1）。不设 = 不检查。
+     取值依据见文件头注释；float 不设是物理下限，不是让步。 */
 const ROLES = [
   {
     id: "chrome",
@@ -115,6 +123,9 @@ const ROLES = [
     layers: ["--glass-chrome-a", "--glass-chrome-b"],
     backdrops: ["canvas"],
     tokens: ["--text-primary", "--text-secondary", "--text-tertiary"],
+    /* 它背后只有画布纯色，透出多少都没有内容可看；这里只求「不是死实色」，
+       所以门槛比抽屉低一档。实色（alpha=1）会判 0%，必红。 */
+    minSeeThrough: 0.04,
   },
   {
     id: "pane",
@@ -129,13 +140,30 @@ const ROLES = [
     layers: ["--glass-drawer-a", "--glass-drawer-b"],
     backdrops: ["scrim:white", "scrim:black"],
     tokens: ["--text-primary", "--text-secondary", "--text-tertiary"],
+    /* 11% 是「能分辨背后有东西在动」的门槛。实测旧值 5.8% —— 用户看着
+       就是一块实心板，这才是「lenso 没效果」的主诉来源。
+       浅色档给 15%：它的遮罩本来就轻（.40 vs .55），白玻璃变灰对黑字
+       更有利，没理由跟着深色档一起保守。 */
+    minSeeThrough: { dark: 0.11, light: 0.14 },
   },
   {
     id: "panel",
-    label: "模态对话框（遮罩托底，含 --danger 文本）",
+    label: "模态对话框（遮罩托底）",
     layers: ["--glass-panel-a", "--glass-panel-b"],
     backdrops: ["scrim:white", "scrim:black"],
-    tokens: ["--text-primary", "--text-secondary", "--text-tertiary", "--danger"],
+    tokens: ["--text-primary", "--text-secondary", "--text-tertiary"],
+    /* 原先这里还挂了 --danger，把面板死死钉在 .96：深红压在半透浅底上永远
+       差一口气（深色档 .94 才 4.50:1）。2026-11-13 改成「危险提示自带
+       不透明底」（见下面的 notice），--danger 从玻璃上撤走 —— 这本来就是
+       lenso 规则 1 的字面要求：文字绝不隔着毛玻璃读，错误提示更不该。 */
+    minSeeThrough: { dark: 0.09, light: 0.11 },
+  },
+  {
+    id: "notice",
+    label: "吊销通告 / 错误行（玻璃面板内自带不透明底）",
+    layers: ["--pane-bg"],
+    backdrops: ["canvas"],
+    tokens: ["--danger"],
   },
   {
     id: "float",
@@ -143,6 +171,8 @@ const ROLES = [
     layers: ["--glass-float-a", "--glass-float-b"],
     backdrops: ["white", "black"],
     tokens: ["--text-primary", "--text-secondary"],
+    /* 刻意不设 minSeeThrough：它没有遮罩托底，白底扫描件 + tertiary 的
+       物理下限就是 alpha≈.84。硬要它透，换来的是可读性塌方。 */
   },
   {
     id: "pill",
@@ -205,6 +235,7 @@ function checkTheme(theme, tokens, opts = {}) {
   const failures = [];
   const rows = [];
   const weaken = opts.weaken ?? 0;
+  const thicken = opts.thicken ?? 0;
 
   for (const role of ROLES) {
     for (const bd of role.backdrops) {
@@ -213,6 +244,12 @@ function checkTheme(theme, tokens, opts = {}) {
         failures.push(`${theme} ${role.id}：底 ${bd} 解析失败（令牌缺失？）`);
         continue;
       }
+      /* 遮罩在本层之下：它吃掉多少，玻璃就少透多少。这是串联透射 */
+      const scrimA = bd.startsWith("scrim:")
+        ? (parseColor(tokens.get("--scrim"))?.a ?? null)
+        : null;
+      let worstSee = Infinity;
+      let worstNeed = null;
       for (const backdrop of backdrops) {
       /* 渐变两档各算一遍，取较差的那一档 */
       for (const layerToken of role.layers) {
@@ -227,8 +264,23 @@ function checkTheme(theme, tokens, opts = {}) {
           continue;
         }
         // 负向对照：把 alpha 压低，模拟「为了好看把玻璃调薄」
-        const eff = { rgb: layer.rgb, a: weaken ? Math.min(layer.a, weaken) : layer.a };
+        let a = layer.a;
+        if (weaken) a = Math.min(layer.a, weaken);
+        if (thicken) a = Math.max(layer.a, thicken);
+        const eff = { rgb: layer.rgb, a };
         const surface = over(eff, backdrop.rgb);
+
+        if (role.minSeeThrough != null) {
+          const need =
+            typeof role.minSeeThrough === "object"
+              ? role.minSeeThrough[theme]
+              : role.minSeeThrough;
+          const see = (scrimA == null ? 1 : 1 - scrimA) * (1 - a);
+          if (see < worstSee) {
+            worstSee = see;
+            worstNeed = need;
+          }
+        }
 
         for (const tk of role.tokens) {
           const fgRaw = tokens.get(tk);
@@ -243,7 +295,7 @@ function checkTheme(theme, tokens, opts = {}) {
           }
           const text = over(fg, surface);
           const ratio = contrast(text, surface);
-          const row = { role, layerToken, bd: backdrop.label, tk, ratio };
+          const row = { role, layerToken, bd: backdrop.label, tk, ratio, see: null };
           rows.push(row);
           if (ratio < T) {
             failures.push(
@@ -253,6 +305,19 @@ function checkTheme(theme, tokens, opts = {}) {
           }
         }
       }
+      }
+      /* 上限：玻璃再安全也不能安全到「看不见」 */
+      if (role.minSeeThrough != null && worstSee !== Infinity) {
+        const need = worstNeed ?? 0;
+        if (worstSee < need) {
+          failures.push(
+            `${theme} ${role.label} · 底 ${bd}：背后内容只能透出 ` +
+              `${(worstSee * 100).toFixed(1)}%，低于 ${(need * 100).toFixed(1)}% ` +
+              `—— 这已经不是玻璃了，是一块实色板`
+          );
+        } else {
+          rows.push({ role, see: worstSee, ratio: Infinity, bd, layerToken: "—", tk: "(见透率)" });
+        }
       }
     }
   }
@@ -282,21 +347,37 @@ for (const theme of ["dark", "light"]) {
         `（${worst.role.label} · ${worst.tk} · ${worst.bd}）`
     );
   }
+  /* 见透率单独列一行：对比度全绿不等于玻璃成立，这两个数是两个方向 */
+  const see = rows.filter((r) => r.see != null);
+  if (see.length) {
+    lines.push(
+      "  见透率：" +
+        see.map((r) => `${r.role.id} ${(r.see * 100).toFixed(1)}%`).join(" · ")
+    );
+  }
 }
 
-/* ---------- 正反对照：把玻璃调薄，判据必须变红 ---------- */
+/* ---------- 正反对照：两端都要能红 ---------- */
 
 if (process.argv.includes("--selftest")) {
-  const weak = { weakFailures: 0 };
+  const weak = { n: 0 };
+  const thick = { n: 0 };
   for (const theme of ["dark", "light"]) {
-    const { failures: f } = checkTheme(theme, themes[theme], { weaken: 0.45 });
-    weak.weakFailures += f.length;
+    /* 太薄：可读性判据必须响 */
+    weak.n += checkTheme(theme, themes[theme], { weaken: 0.45 }).failures.length;
+    /* 太厚：见透率判据必须响（旧版判据在这里全绿，正是「玻璃变实色」的漏网路径） */
+    thick.n += checkTheme(theme, themes[theme], { thicken: 0.99 }).failures.length;
   }
   lines.push(
-    `\n正反对照：把玻璃 alpha 压到 0.45 → ${weak.weakFailures} 项告警` +
-      (weak.weakFailures > 0 ? " ✅（判据有效）" : " ❌（判据失效：这么薄都判不出来）")
+    `\n正反对照 ①：把玻璃 alpha 压到 0.45 → ${weak.n} 项告警` +
+      (weak.n > 0 ? " ✅（可读性判据有效）" : " ❌（判据失效：这么薄都判不出来）")
   );
-  if (weak.weakFailures === 0) failures++;
+  lines.push(
+    `正反对照 ②：把玻璃 alpha 拉到 0.99 → ${thick.n} 项告警` +
+      (thick.n > 0 ? " ✅（见透率判据有效）" : " ❌（判据失效：实色板也判不出来）")
+  );
+  if (weak.n === 0) failures++;
+  if (thick.n === 0) failures++;
 }
 
 console.log(lines.join("\n"));

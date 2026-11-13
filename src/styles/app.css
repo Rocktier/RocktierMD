@@ -23,34 +23,56 @@
  *   对每一档取纯白/纯黑两个极端底，并带正反对照自检。
  *   CSS 里因此不再出现裸的半透明颜色。
  *
- * 与设计稿的一处偏离（已写进台账）：
- *   窗口是不透明的（tauri.conf 未开 transparent / vibrancy），背后没有
- *   桌面可折射，所以 chrome 的 alpha 比 lenso 原值（.92→.78）更高。
- *   过度透明在这里换不到玻璃感，只会把底色洗淡。
+ * 与设计稿的偏离（2026-11-13 重写）：
+ *   窗口仍是不透明的（tauri.conf 未开 transparent / vibrancy），背后没有
+ *   桌面可折射。这条约束的真实含义不是「所以要更不透明」，而是
+ *   「Web 层能做到的只有『挡住自己家的内容』」—— 玻璃感来自
+ *   **能看见背后被模糊的内容**，不是来自半透本身。
+ *   所以 2026-11-13 把 alpha 整体下调：见透率 chrome 6% /
+ *   抽屉 11.7%（深）14.4%（浅）/ 对话框 9.9%（深）12%（浅）。
+ *   旧值（抽屉 5.8%、对话框 1.8%）在屏幕上就是实色板，用户原话
+ *   「没看到很有效果」—— 那是判据只守下限造成的。
  *
  * 取值口径：
  *   chrome 贴边工具条 / 标签栏 / 状态条；panel 侧栏与对话框；
  *   pill 状态条与分段控件；raise 抬起来的那一枚（选中项、活动标签）。
- *   浮在**任意内容**之上（预览里可以是一张照片）的面，alpha 必须
+ *   浮在**任意内容**之上且无遮罩托底（toast / 查找条）的面，alpha 必须
  *   ≥ .90：否则浅色档配深色照片、深色档配白底扫描件时，文字会掉到
- *   3:1 以下。这道红线由 verify-glass-contrast.mjs 守。
+ *   3:1 以下。这类面**不做玻璃**，判据对它们不设见透率。
+ *   两端红线都由 verify-glass-contrast.mjs 守（过薄 → 可读性红；
+ *   过厚 → 见透率红）。
+ *
+ * 危险色不许裸在玻璃上：
+ *   对话框里的吊销通告 / 错误行自带 --pane-bg 不透明底。这不是补丁，
+ *   是 lenso 规则 1 的字面要求 —— 撤掉 --danger 之后面板才降到 .78。
  * ─────────────────────────────────────────────────────────────────── */
 
 :root {
   /* 画布 / 页面 / chrome 三级明度：玻璃要「读得出来」，前提是它压的
-     那一层不是同一个明度。浅色档沿用 macOS 惯例（灰画布 + 白纸）。 */
-  --canvas: #050507;
-  --pane-bg: #121215;
-  --glass-chrome-a: #1c1c20;
-  --glass-chrome-b: #18181c;
+     那一层不是同一个明度。浅色档沿用 macOS 惯例（灰画布 + 白纸）。
+     2026-11-13：深色档原来是 #050507 / #121215，只差 13 个 RGB 值，
+     卡片在屏幕上根本看不出浮起（实测 lum 5.1 / 18.2）—— 拉开到
+     #000000 / #17171b 才有「纸放在桌上」的层次。 */
+  --canvas: #000000;
+  --pane-bg: #17171b;
+  /* chrome 从**实色**改成半透：原来是 #1c1c20（alpha=1），模糊一个实色
+     背景等于没模糊，工具栏 / 标签栏 / 状态条因此从来就不是玻璃。
+     半透之后它至少会吃到一点画布色，配上内描边才有材质感。 */
+  --glass-chrome-a: rgba(30, 30, 35, 0.94);
+  --glass-chrome-b: rgba(24, 24, 29, 0.92);
   /* 深色档的 panel 比设计稿暗一档（lenso 原值是 rgba(58,58,64,…)）。
-     原因是 --danger #ff4a3d 出现在对话框里（吊销通告 / 激活失败）：
-     压在 48 上面的合成对比只有 3.75:1，压到 30 附近才回到 4.5 以上。
-     「玻璃好看」不能拿错误提示的可读性去换 —— verify-glass 会拦。 */
-  --glass-panel-a: rgba(30, 30, 35, 0.96);
-  --glass-panel-b: rgba(24, 24, 28, 0.95);
-  --glass-drawer-a: rgba(46, 46, 53, 0.87);
-  --glass-drawer-b: rgba(34, 34, 40, 0.84);
+     2026-11-13：--danger 已从玻璃上撤走（错误提示改自带不透明底），
+     这条「必须压到 30 附近」的约束随之解除，面板 .96 → .78，
+     见透率 1.8% → 9.9% —— 对话框终于也是玻璃了。 */
+  --glass-panel-a: rgba(34, 34, 40, 0.78);
+  --glass-panel-b: rgba(28, 28, 34, 0.76);
+  /* 抽屉从 .87/.84 降到 .74/.72：见透率 5.8% → 11.7%。
+     这是「lenso 看不出来」的主诉所在 —— 旧值下背后文字只透出 5.8%，
+     再被 blur(50px) 糊一遍，屏幕上就是一块实心板。 */
+  --glass-drawer-a: rgba(48, 48, 56, 0.74);
+  --glass-drawer-b: rgba(36, 36, 43, 0.72);
+  /* float 保持 .95/.93：它没有遮罩托底，直接压在预览内容上，白底扫描件
+     + tertiary 的物理下限就是 .84。判据对 float 不设见透率，理由在此。 */
   --glass-float-a: rgba(28, 28, 32, 0.95);
   --glass-float-b: rgba(24, 24, 28, 0.93);
   --glass-pill-a: rgba(255, 255, 255, 0.10);
@@ -59,25 +81,35 @@
   --glass-raise-a: rgba(255, 255, 255, 0.16);
   --glass-raise-b: rgba(255, 255, 255, 0.09);
   --glass-hairline: rgba(255, 255, 255, 0.10);
-  --glass-hairline-strong: rgba(255, 255, 255, 0.14);
+  /* 内描边加亮：玻璃之所以看着像玻璃，一半靠这条 0.5px 的边缘光。
+     画布压到纯黑之后，.14 在屏幕上会被吃掉，抬到 .18。 */
+  --glass-hairline-strong: rgba(255, 255, 255, 0.18);
   --glass-sheen: rgba(255, 255, 255, 0.06);
   --glass-blur: 50px;
   --glass-saturate: 160%;
   --glass-radius: 18px;
-  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  /* 画布变黑之后浮层要更重的影子才「抬得起来」（原来的 .55 在黑底上读不出） */
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.68);
   --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.40);
   --scrim: rgba(0, 0, 0, 0.55);
 }
 
 [data-theme="light"] {
+  /* 浅色档的三级层次本来就成立（灰画布 + 白纸），不动画布。 */
   --canvas: #e6e6eb;
   --pane-bg: #ffffff;
-  --glass-chrome-a: #f5f5f7;
-  --glass-chrome-b: #f0f0f3;
-  --glass-panel-a: rgba(255, 255, 255, 0.96);
-  --glass-panel-b: rgba(250, 250, 252, 0.94);
-  --glass-drawer-a: rgba(255, 255, 255, 0.90);
-  --glass-drawer-b: rgba(251, 251, 253, 0.87);
+  /* 同深色档：实色 → 半透，否则 backdrop-filter 无从生效 */
+  --glass-chrome-a: rgba(245, 245, 247, 0.94);
+  --glass-chrome-b: rgba(240, 240, 243, 0.92);
+  /* 浅色档没有 danger 那个包袱（--danger #b8342a 在亮面上有 4.9:1 余量），
+     所以面板可以真的做成玻璃：.96 → .80，见透率 2.4% → 12%。 */
+  --glass-panel-a: rgba(255, 255, 255, 0.80);
+  --glass-panel-b: rgba(250, 250, 252, 0.78);
+  /* 抽屉 .90/.87 → .76/.74，见透率 6.0% → 14.4%。白玻璃变灰对黑字更有利，
+     浅色档可以比深色档透得多；但纯黑内容（夜空照片）是最坏底，
+     再透下去 tertiary（rgba(0,0,0,.60)）就撑不住 4.5:1 了。 */
+  --glass-drawer-a: rgba(255, 255, 255, 0.76);
+  --glass-drawer-b: rgba(251, 251, 253, 0.74);
   --glass-float-a: rgba(255, 255, 255, 0.96);
   --glass-float-b: rgba(250, 250, 252, 0.94);
   --glass-pill-a: rgba(255, 255, 255, 0.86);
@@ -86,10 +118,10 @@
   --glass-raise-a: rgba(255, 255, 255, 0.98);
   --glass-raise-b: rgba(255, 255, 255, 0.90);
   --glass-hairline: rgba(0, 0, 0, 0.10);
-  --glass-hairline-strong: rgba(0, 0, 0, 0.14);
+  --glass-hairline-strong: rgba(0, 0, 0, 0.16);
   --glass-sheen: rgba(255, 255, 255, 0.70);
   --glass-blur: 25px;
-  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.20);
   --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.10);
   --scrim: rgba(0, 0, 0, 0.40);
 }
@@ -1255,12 +1287,18 @@ html.is-mac .toolbar {
 .license-body p { margin: 0 0 10px; }
 
 /* 吊销通告（B1）：回执已清、info 与试用到期无从区分，靠调用方传 revoked 标记。
-   文字用 --danger（浅档 #b8342a = 5.02:1、暗档 #ff4a3d = 5.53:1，均达 AA）。 */
+   文字用 --danger（浅档 #b8342a = 5.86:1、暗档 #ff4a3d = 5.37:1，均达 AA）。
+
+   2026-11-13：面板改成真玻璃之后，这里必须自带**不透明底**。
+   危险提示裸在毛玻璃上读，对比度会随背后内容漂移（浅色档配纯黑内容时
+   #b8342a 只有 3.67:1）。这也是 lenso 规则 1 的字面要求：文字不隔玻璃读，
+   错误提示更不该。撤掉 --danger 之后面板才能从 .96 降到 .78。 */
 .license-revoked-notice {
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 8px 10px;
   color: var(--danger);
+  background: var(--pane-bg);
 }
 .license-revoked-notice small { color: inherit; }
 
@@ -1288,9 +1326,15 @@ html.is-mac .toolbar {
 }
 .license-field input:focus { border-color: var(--accent-brand, var(--accent)); }
 
+/* 同上：错误行也自带不透明底 —— 12px 红字压在毛玻璃上是最难读的组合 */
 .license-error {
   color: var(--danger);
   font-size: 12px;
+  background: var(--pane-bg);
+  border-radius: 7px;
+  padding: 6px 9px;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .license-footer {
