@@ -96,6 +96,7 @@ const STRINGS = {
     "toast.cannotReadFile": "无法读取文件",
     "toast.cannotResolvePath": "无法解析相对路径",
     "toast.fileNotExists": "文件不存在",
+    "toast.recentUnavailable": "这个文件已访问不到，已从最近列表移除。请用「打开」重新选择它。",
     "toast.cannotOpenFile": "无法打开文件",
     "toast.imageInserted": "图片已插入",
     "toast.reloaded": "已重新加载",

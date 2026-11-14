@@ -42,6 +42,7 @@ interface TabMeta {
 import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
+import { dropRecent, parseRecent, pushRecent } from "./recent";
 
 /* 2026-10-04 键改名：家族命名空间统一用「.」，此前 MD 用的是 "rocktier-md-…"（连字符）。
  * 改名只为跨产品一致，不该顺手清掉用户已选的偏好 —— 所以读取处仍回落旧键。旧键不删。 */
@@ -51,7 +52,6 @@ const VERSION = currentVersion();
 const LAST_PATH_KEY = "rocktier.last-path";
 const RECENT_KEY = "rocktier.md.recent";
 const RECENT_KEY_LEGACY = "rocktier-md-recent";
-const RECENT_MAX = 5;
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -333,10 +333,10 @@ export default function App() {
       if (path) {
         localStorage.setItem(LAST_PATH_KEY, path);
         // 最近打开列表（本轮 U1）：去重、最新在前、封顶 5 条
-        const list: string[] = JSON.parse(
-            (localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY)) || "[]",
-          );
-        const next = [path, ...list.filter((p) => p !== path)].slice(0, RECENT_MAX);
+        const list = parseRecent(
+          localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY),
+        );
+        const next = pushRecent(list, path);
         localStorage.setItem(RECENT_KEY, JSON.stringify(next));
         setRecent(next);
       } else {
@@ -347,13 +347,27 @@ export default function App() {
     }
   }, []);
 
+  /* 从「最近打开」里剔除一条访问不到的路径。
+   *
+   * 为什么要有它：沙箱版没有 security-scoped bookmark，本地保存的是绝对路径，
+   * 重启或被移动后 open 会失败。此前失败只弹一句「无法读取文件」，条目永远留在
+   * 列表里，每点一次失败一次 —— 用户看到的是「这个按钮坏了」，而不是「这个文件
+   * 需要重新授权」。剔掉比留着诚实（D-152 之后的口径：宁可显式降级，不许静默）。 */
+  const forgetRecent = useCallback((path: string) => {
+    try {
+      const list = parseRecent(localStorage.getItem(RECENT_KEY));
+      const next = dropRecent(list, path);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      setRecent(next);
+      if (localStorage.getItem(LAST_PATH_KEY) === path) localStorage.removeItem(LAST_PATH_KEY);
+    } catch {
+      // storage unavailable — 列表刷新失败不影响其它逻辑
+    }
+  }, []);
+
   // Load recent list on mount
   useEffect(() => {
-    try {
-      setRecent(JSON.parse((localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY)) || "[]"));
-    } catch {
-      // corrupted entry — start empty
-    }
+    setRecent(parseRecent(localStorage.getItem(RECENT_KEY) ?? localStorage.getItem(RECENT_KEY_LEGACY)));
   }, []);
 
   // Restore last-opened document on launch (zero-click resume), then scan
@@ -732,31 +746,61 @@ export default function App() {
   // 在桌面端通过 Tauri 拖放事件 / 浏览器 dev 通过 HTML5 拖放打开文件。
   // 注意：打包版（dragDropEnabled 默认 true）下 HTML5 drop 不会触发，
   // 必须走 onDragDropEvent —— 此前只实现了 HTML5 路径，导致发布版拖拽失效。
-  const openMarkdownPath = useCallback(async (path: string): Promise<boolean> => {
+  /* 打开一份 .md 并切到它的标签。
+   *
+   * 返回值区分「没打开」的三种原因，因为调用方要区别对待：标签上限不能当成
+   * 文件失效（否则一次点满 5 个标签就会把最近列表里的文件全剔掉）。
+   *
+   * quiet: 由调用方自己负责报错文案时置 true —— 「最近打开」点失效条目要提示的是
+   * 「请重新选择文件」，而不是通用的「无法读取文件」。
+   */
+  const openMarkdownPath = useCallback(async (
+    path: string,
+    opts?: { quiet?: boolean },
+  ): Promise<"ok" | "unavailable" | "tab-limit" | "unsupported"> => {
+    const report = (msg: string) => {
+      if (!opts?.quiet) showToast(msg, "error");
+    };
     const ext = path.split(".").pop()?.toLowerCase();
     if (!ext || !MARKDOWN_EXTS.includes(ext)) {
-      showToast(t("toast.unsupportedType"), "error");
-      return false;
+      report(t("toast.unsupportedType"));
+      return "unsupported";
     }
+    let loaded: { content: string; eol: Eol };
     try {
+      // 沙箱（MAS）下对未授权路径的探测，究竟返回 false 还是直接抛错，
+      // 没有在商店包上实测过（D-152 未验项），所以两种结局都收进同一个 try：
+      // 无论哪种都归为「访问不到」，不再细分「不存在」与「没权限」。
       if (!(await exists(path))) {
-        showToast(t("toast.fileNotExists"), "error");
-        return false;
+        report(t("toast.fileNotExists"));
+        return "unavailable";
       }
-      const { content, eol } = normalizeEol(await readTextFile(path));
-      if (!openInTab(
-        { path, content, modified: false },
-        { eol, savedContent: content, savedPath: path },
-      ))
-        return false;
-      rememberPath(path);
-      showToast(t("toast.fileOpened"), "success");
-      return true;
+      loaded = normalizeEol(await readTextFile(path));
     } catch {
-      showToast(t("toast.cannotReadFile"), "error");
-      return false;
+      report(t("toast.cannotReadFile"));
+      return "unavailable";
     }
+    if (!openInTab(
+      { path, content: loaded.content, modified: false },
+      { eol: loaded.eol, savedContent: loaded.content, savedPath: path },
+    ))
+      return "tab-limit";
+    rememberPath(path);
+    showToast(t("toast.fileOpened"), "success");
+    return "ok";
   }, [openInTab, rememberPath, showToast]);
+
+  /* 「最近打开」的点击入口。与普通打开的区别只有失败处理：
+   * 访问不到就把它从列表里剔掉，并明确告诉用户下一步怎么做。
+   * 标签满不算失效，其余原因一律不剔（unsupported 说明列表里存了脏数据，
+   * 也顺手剔掉）。 */
+  const openRecentPath = useCallback(async (path: string) => {
+    const res = await openMarkdownPath(path, { quiet: true });
+    if (res === "unavailable" || res === "unsupported") {
+      forgetRecent(path);
+      showToast(t("toast.recentUnavailable"), "error");
+    }
+  }, [forgetRecent, openMarkdownPath, showToast]);
 
   // Drag-and-drop file open (browser dev fallback; desktop uses onDragDropEvent)
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -1068,7 +1112,7 @@ export default function App() {
           recent={recent}
           currentPath={doc.path}
           onOpenRecent={(p) => {
-            openMarkdownPath(p);
+            void openRecentPath(p);
             setSidebar(false);
           }}
           onJumpTo={(line) => {

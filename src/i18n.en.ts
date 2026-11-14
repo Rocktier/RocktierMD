@@ -70,6 +70,7 @@ export const en = {
     "toast.cannotReadFile": "Unable to read file",
     "toast.cannotResolvePath": "Cannot resolve relative path",
     "toast.fileNotExists": "File not found",
+    "toast.recentUnavailable": "That file can't be reached anymore, so it was removed from Recent. Use Open to pick it again.",
     "toast.cannotOpenFile": "Unable to open file",
     "toast.imageInserted": "Image inserted",
     "toast.reloaded": "Reloaded",
